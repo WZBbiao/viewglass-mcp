@@ -1,0 +1,278 @@
+#!/usr/bin/env node
+/**
+ * Viewglass MCP Server
+ *
+ * Exposes 7 tools for AI agents to inspect and interact with iOS app UI at runtime:
+ *   ui_snapshot, ui_query, ui_attr_get, ui_tap, ui_scroll, ui_set_attr, compare_with_design
+ *
+ * Requires the `viewglass` binary to be in PATH, or set VIEWGLASS_BIN env var.
+ */
+
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
+
+import { uiSnapshot } from "./tools/ui_snapshot.js";
+import { uiQuery } from "./tools/ui_query.js";
+import { uiAttrGet } from "./tools/ui_attr_get.js";
+import { uiTap } from "./tools/ui_tap.js";
+import { uiScroll } from "./tools/ui_scroll.js";
+import { uiSetAttr } from "./tools/ui_set_attr.js";
+import { compareWithDesign } from "./tools/compare_with_design.js";
+
+const server = new McpServer({
+  name: "viewglass-mcp",
+  version: "0.1.0",
+});
+
+const sessionSchema = z
+  .string()
+  .optional()
+  .describe("Session in bundleId@port format. Auto-detected if omitted.");
+
+// ─── ui_snapshot ────────────────────────────────────────────────────────────
+
+server.registerTool(
+  "ui_snapshot",
+  {
+    description:
+      "Fast and cheap — capture the full UI node hierarchy of the running iOS app. " +
+      "Returns a JSON tree of all windows, views, and nodes with className, frame, " +
+      "accessibilityIdentifier, and child relationships. " +
+      "Preferred over screenshot for finding elements and understanding layout. " +
+      "Use filter to narrow to a specific UIKit class (e.g. UILabel, UIButton). " +
+      "Do NOT take a screenshot to inspect UI structure — use this tool instead.",
+    inputSchema: {
+      session: sessionSchema,
+      filter: z
+        .string()
+        .optional()
+        .describe("Only return nodes of this UIKit class name (e.g. UILabel)."),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ session, filter }) => {
+    try {
+      const result = await uiSnapshot({ session, filter });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (e) {
+      return { isError: true, content: [{ type: "text", text: String(e) }] };
+    }
+  }
+);
+
+// ─── ui_query ───────────────────────────────────────────────────────────────
+
+server.registerTool(
+  "ui_query",
+  {
+    description:
+      "Find UI nodes matching a locator. Returns an array of matching nodes with oid, " +
+      "className, frame, accessibilityIdentifier, and other properties. " +
+      "Use the returned oid values with ui_attr_get, ui_set_attr, or for invoke calls. " +
+      "Locator formats: '#accessibilityIdentifier', 'UIClassName', or numeric OID string. " +
+      "Do NOT use screenshot to find elements — use this tool instead.",
+    inputSchema: {
+      locator: z
+        .string()
+        .describe(
+          "Locator: '#accessibilityIdentifier', UIKit class name, or OID string."
+        ),
+      session: sessionSchema,
+    },
+    annotations: { readOnlyHint: true, idempotentHint: true },
+  },
+  async ({ locator, session }) => {
+    try {
+      const result = await uiQuery({ locator, session });
+      if (result.length === 0) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: "text",
+              text:
+                `ui_query: locator '${locator}' matched 0 nodes. ` +
+                "Try a different accessibilityIdentifier, class name, or OID. " +
+                "Call ui_snapshot to inspect the current hierarchy.",
+            },
+          ],
+        };
+      }
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (e) {
+      return { isError: true, content: [{ type: "text", text: String(e) }] };
+    }
+  }
+);
+
+// ─── ui_attr_get ─────────────────────────────────────────────────────────────
+
+server.registerTool(
+  "ui_attr_get",
+  {
+    description:
+      "Get one or more runtime attributes of a UI node by OID. " +
+      "Returns a map of { attrKey: value }. Use ui_query to get the OID first. " +
+      "Common keys: frame, backgroundColor, alpha, hidden, text, font, " +
+      "contentMode, accessibilityIdentifier, accessibilityLabel, cornerRadius.",
+    inputSchema: {
+      oid: z.string().describe("Node OID from ui_query."),
+      attrs: z
+        .array(z.string())
+        .min(1)
+        .describe('Attribute keys to fetch (e.g. ["frame", "backgroundColor"]).'),
+      session: sessionSchema,
+    },
+    annotations: { readOnlyHint: true, idempotentHint: true },
+  },
+  async ({ oid, attrs, session }) => {
+    try {
+      const result = await uiAttrGet({ oid, attrs, session });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (e) {
+      return { isError: true, content: [{ type: "text", text: String(e) }] };
+    }
+  }
+);
+
+// ─── ui_tap ──────────────────────────────────────────────────────────────────
+
+server.registerTool(
+  "ui_tap",
+  {
+    description:
+      "Tap a UI element. Locator must match exactly one visible node. " +
+      "Automatically refreshes after tapping and returns the post-action hierarchy " +
+      "so you can confirm navigation or state changes without a separate ui_snapshot call. " +
+      "Returns { tapped: locator, hierarchy: <post-action snapshot> }.",
+    inputSchema: {
+      locator: z
+        .string()
+        .describe("Locator matching exactly one node: '#id', class name, or OID."),
+      session: sessionSchema,
+    },
+  },
+  async ({ locator, session }) => {
+    try {
+      const result = await uiTap({ locator, session });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (e) {
+      return { isError: true, content: [{ type: "text", text: String(e) }] };
+    }
+  }
+);
+
+// ─── ui_scroll ───────────────────────────────────────────────────────────────
+
+server.registerTool(
+  "ui_scroll",
+  {
+    description:
+      "Scroll a UIScrollView, UITableView, or UICollectionView. " +
+      "Returns post-action hierarchy so you can verify newly visible content. " +
+      "Use direction 'down' to reveal content below the fold, 'up' to scroll back. " +
+      "distance defaults to 300 pts if omitted.",
+    inputSchema: {
+      locator: z
+        .string()
+        .describe("Locator for the scroll view: '#id', class name, or OID."),
+      direction: z.enum(["up", "down", "left", "right"]).describe("Scroll direction."),
+      distance: z.number().positive().optional().describe("Distance in pts (default 300)."),
+      animated: z.boolean().optional().describe("Whether to animate (default true)."),
+      session: sessionSchema,
+    },
+  },
+  async ({ locator, direction, distance, animated, session }) => {
+    try {
+      const result = await uiScroll({ locator, direction, distance, animated, session });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (e) {
+      return { isError: true, content: [{ type: "text", text: String(e) }] };
+    }
+  }
+);
+
+// ─── ui_set_attr ─────────────────────────────────────────────────────────────
+
+server.registerTool(
+  "ui_set_attr",
+  {
+    description:
+      "Set an attribute on a UI node at runtime. Changes are LIVE and immediate — " +
+      "no recompile needed. Use for visual debugging: tweak colors, fonts, or text " +
+      "to match design spec, then read back with ui_attr_get to verify. " +
+      "WARNING: Changes are ephemeral and reset on app relaunch. " +
+      "Requires node OID from ui_query. " +
+      "Navigation patterns (get controller OID from ui_query, then use viewglass invoke): " +
+      "  pop: invoke <navController-oid> popViewControllerAnimated: true — " +
+      "  dismiss modal: invoke <vc-oid> dismissViewControllerAnimated:completion: true nil",
+    inputSchema: {
+      oid: z.string().describe("Node OID from ui_query."),
+      attr: z
+        .string()
+        .describe(
+          "Attribute key (e.g. backgroundColor, alpha, hidden, text, cornerRadius)."
+        ),
+      value: z
+        .string()
+        .describe(
+          "New value as string (e.g. '#FF0000' for color, '0.5' for alpha, 'true'/'false' for bool)."
+        ),
+      session: sessionSchema,
+    },
+    annotations: { destructiveHint: true, idempotentHint: true },
+  },
+  async ({ oid, attr, value, session }) => {
+    try {
+      const result = await uiSetAttr({ oid, attr, value, session });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (e) {
+      return { isError: true, content: [{ type: "text", text: String(e) }] };
+    }
+  }
+);
+
+// ─── compare_with_design ─────────────────────────────────────────────────────
+
+server.registerTool(
+  "compare_with_design",
+  {
+    description:
+      "Expensive — capture a device screenshot and return it alongside a Figma design URL " +
+      "for visual comparison. Use after code changes to verify UI matches the design spec. " +
+      "This tool captures the actual rendered UI; you must then call Figma MCP " +
+      "`get_screenshot` or `get_design_context` with the returned figmaNodeUrl to fetch " +
+      "the reference design, and visually diff both images to produce a discrepancy report. " +
+      "Optionally scope to a specific view by passing a locator.",
+    inputSchema: {
+      figmaNodeUrl: z
+        .string()
+        .url()
+        .describe(
+          "Figma node URL (e.g. https://figma.com/design/:fileKey/...?node-id=1-2)."
+        ),
+      locator: z
+        .string()
+        .optional()
+        .describe(
+          "Locator to screenshot a specific view instead of full screen. Omit for full screen."
+        ),
+      session: sessionSchema,
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ figmaNodeUrl, locator, session }) => {
+    try {
+      const result = await compareWithDesign({ figmaNodeUrl, locator, session });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (e) {
+      return { isError: true, content: [{ type: "text", text: String(e) }] };
+    }
+  }
+);
+
+// ─── Start ───────────────────────────────────────────────────────────────────
+
+const transport = new StdioServerTransport();
+await server.connect(transport);
