@@ -7,11 +7,11 @@ function makeExec(): ExecFn {
 }
 
 describe("uiSetAttr", () => {
-  it("calls attr set <oid> --attr <key> <value> with session", async () => {
+  it("calls attr set <oid> <key> <value> --session (positional, no --attr flag)", async () => {
     const exec = makeExec() as ReturnType<typeof vi.fn>;
     await uiSetAttr({ oid: "5678", attr: "backgroundColor", value: "#FF0000", session: "com.test@1234" }, exec);
     expect(exec.mock.calls[0][1]).toEqual([
-      "attr", "set", "5678", "--attr", "backgroundColor", "#FF0000", "--session", "com.test@1234",
+      "attr", "set", "5678", "backgroundColor", "#FF0000", "--session", "com.test@1234",
     ]);
   });
 
@@ -23,7 +23,7 @@ describe("uiSetAttr", () => {
 
   it("propagates CLI errors", async () => {
     const exec = vi.fn().mockRejectedValue(new Error("node not found"));
-    await expect(uiSetAttr({ oid: "bad", attr: "text", value: "x", session: "com.test@1234" }, exec))
+    await expect(uiSetAttr({ oid: "bad", attr: "text", value: "x", session: "com.test@1234" }, exec as ExecFn))
       .rejects.toThrow("node not found");
   });
 });

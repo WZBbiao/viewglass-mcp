@@ -8,7 +8,7 @@ export interface UISetAttrInput {
   attr: string;
   /**
    * New value as a string. Examples:
-   *  - backgroundColor: "#FF0000" or "rgba(1,0,0,1)"
+   *  - backgroundColor: "#FF0000"
    *  - alpha: "0.5"
    *  - hidden: "true" / "false"
    *  - text: "Hello"
@@ -30,7 +30,8 @@ export async function uiSetAttr(
   exec?: ExecFn
 ): Promise<{ oid: string; attr: string; value: string; ok: true }> {
   const session = await resolveSession(input.session, exec);
-  await runCLI(["attr", "set", input.oid, "--attr", input.attr, input.value], {
+  // CLI syntax: attr set <target> <key> <value> [--session <s>]
+  await runCLI(["attr", "set", input.oid, input.attr, input.value], {
     session,
     exec,
   });

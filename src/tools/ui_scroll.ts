@@ -10,11 +10,18 @@ export interface UIScrollInput {
   direction: ScrollDirection;
   /** Distance in pts. Defaults to 300 if omitted. */
   distance?: number;
-  /** Whether to animate the scroll. Defaults to true. */
+  /** Whether to animate the scroll. Defaults to false. */
   animated?: boolean;
   /** Viewglass session in bundleId@port format. Auto-detected if omitted. */
   session?: string;
 }
+
+const DIRECTION_DELTA: Record<ScrollDirection, [number, number]> = {
+  up: [0, -1],
+  down: [0, 1],
+  left: [-1, 0],
+  right: [1, 0],
+};
 
 /**
  * Scroll a scroll view in the given direction. Returns post-action hierarchy.
@@ -27,14 +34,12 @@ export async function uiScroll(
   exec?: ExecFn
 ): Promise<{ scrolled: string; direction: ScrollDirection; hierarchy: unknown }> {
   const session = await resolveSession(input.session, exec);
-  const args = [
-    "scroll",
-    input.locator,
-    "--direction",
-    input.direction,
-  ];
-  if (input.distance !== undefined) args.push("--distance", String(input.distance));
-  if (input.animated === false) args.push("--animated", "false");
+  const dist = input.distance ?? 300;
+  const [dx, dy] = DIRECTION_DELTA[input.direction];
+  const byArg = `${dx * dist},${dy * dist}`;
+
+  const args = ["scroll", input.locator, "--by", byArg];
+  if (input.animated) args.push("--animated");
 
   await runCLI(args, { session, exec });
   await runCLI(["refresh"], { session, exec });

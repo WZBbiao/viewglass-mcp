@@ -117,11 +117,12 @@ server.registerTool(
       "Common keys: frame, backgroundColor, alpha, hidden, text, font, " +
       "contentMode, accessibilityIdentifier, accessibilityLabel, cornerRadius.",
     inputSchema: {
-      oid: z.string().describe("Node OID from ui_query."),
+      oid: z.coerce.string().describe("Node OID from ui_query (number or string)."),
       attrs: z
         .array(z.string())
         .min(1)
-        .describe('Attribute keys to fetch (e.g. ["frame", "backgroundColor"]).'),
+        .optional()
+        .describe('Attribute keys to fetch (e.g. ["frame", "backgroundColor"]). Omit to get all attributes.'),
       session: sessionSchema,
     },
     annotations: { readOnlyHint: true, idempotentHint: true },
@@ -208,7 +209,7 @@ server.registerTool(
       "  pop: invoke <navController-oid> popViewControllerAnimated: true — " +
       "  dismiss modal: invoke <vc-oid> dismissViewControllerAnimated:completion: true nil",
     inputSchema: {
-      oid: z.string().describe("Node OID from ui_query."),
+      oid: z.coerce.string().describe("Node OID from ui_query (number or string)."),
       attr: z
         .string()
         .describe(

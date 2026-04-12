@@ -11,7 +11,8 @@
     "build": "tsc",
     "dev": "tsx src/index.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e": "npm run build && VIEWGLASS_BIN=/Users/wangzhenbiao/works/lookin/.build/release/viewglass npx tsx src/__tests__/e2e.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1"

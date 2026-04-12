@@ -20,7 +20,7 @@ export type ExecFn = (
 
 /** Default exec function using Node's child_process. */
 export const defaultExec: ExecFn = (file, args, opts) =>
-  _execFile(file, args, opts) as Promise<RunResult>;
+  _execFile(file, args, { ...opts, maxBuffer: 50 * 1024 * 1024 }) as Promise<RunResult>;
 
 /**
  * Run a viewglass CLI sub-command and return stdout/stderr.

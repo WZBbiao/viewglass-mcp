@@ -11,40 +11,48 @@ function makeExec(): ExecFn {
 }
 
 describe("uiScroll", () => {
-  it("calls scroll with locator, --direction, session", async () => {
+  it("calls scroll with --by 0,300 for direction=down", async () => {
     const exec = makeExec() as ReturnType<typeof vi.fn>;
     await uiScroll({ locator: "#feed", direction: "down", session: "com.test@1234" }, exec);
-    const scrollCall = (exec.mock.calls as [string, string[]][]).find((c) => c[1][0] === "scroll");
-    expect(scrollCall).toBeDefined();
-    expect(scrollCall![1]).toContain("#feed");
-    expect(scrollCall![1]).toContain("--direction");
-    expect(scrollCall![1]).toContain("down");
+    const scrollCall = (exec.mock.calls as [string, string[]][]).find((c) => c[1][0] === "scroll")!;
+    expect(scrollCall[1]).toContain("#feed");
+    expect(scrollCall[1]).toContain("--by");
+    expect(scrollCall[1]).toContain("0,300");
   });
 
-  it("appends --distance when provided", async () => {
+  it("calls scroll with --by 0,-300 for direction=up", async () => {
+    const exec = makeExec() as ReturnType<typeof vi.fn>;
+    await uiScroll({ locator: "#feed", direction: "up", session: "com.test@1234" }, exec);
+    const scrollCall = (exec.mock.calls as [string, string[]][]).find((c) => c[1][0] === "scroll")!;
+    expect(scrollCall[1]).toContain("0,-300");
+  });
+
+  it("uses custom distance in --by arg", async () => {
     const exec = makeExec() as ReturnType<typeof vi.fn>;
     await uiScroll({ locator: "#feed", direction: "down", distance: 500, session: "com.test@1234" }, exec);
     const scrollCall = (exec.mock.calls as [string, string[]][]).find((c) => c[1][0] === "scroll")!;
-    expect(scrollCall[1]).toContain("--distance");
-    expect(scrollCall[1]).toContain("500");
+    expect(scrollCall[1]).toContain("0,500");
   });
 
-  it("appends --animated false when animated is false", async () => {
+  it("appends --animated flag (not value) when animated=true", async () => {
     const exec = makeExec() as ReturnType<typeof vi.fn>;
-    await uiScroll({ locator: "#feed", direction: "up", animated: false, session: "com.test@1234" }, exec);
+    await uiScroll({ locator: "#feed", direction: "down", animated: true, session: "com.test@1234" }, exec);
     const scrollCall = (exec.mock.calls as [string, string[]][]).find((c) => c[1][0] === "scroll")!;
     expect(scrollCall[1]).toContain("--animated");
-    expect(scrollCall[1]).toContain("false");
+    // --animated is a boolean flag, not followed by a value
+    const idx = scrollCall[1].indexOf("--animated");
+    expect(scrollCall[1][idx + 1]).not.toBe("false");
+    expect(scrollCall[1][idx + 1]).not.toBe("true");
   });
 
-  it("omits --animated when not set to false", async () => {
+  it("omits --animated when animated is false or undefined", async () => {
     const exec = makeExec() as ReturnType<typeof vi.fn>;
     await uiScroll({ locator: "#feed", direction: "down", session: "com.test@1234" }, exec);
     const scrollCall = (exec.mock.calls as [string, string[]][]).find((c) => c[1][0] === "scroll")!;
     expect(scrollCall[1]).not.toContain("--animated");
   });
 
-  it("returns scrolled locator, direction, and post-action hierarchy", async () => {
+  it("returns scrolled, direction, and post-action hierarchy", async () => {
     const exec = makeExec();
     const result = await uiScroll({ locator: "#feed", direction: "down", session: "com.test@1234" }, exec);
     expect(result.scrolled).toBe("#feed");

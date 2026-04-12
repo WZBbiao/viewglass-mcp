@@ -2,41 +2,47 @@ import { describe, it, expect, vi } from "vitest";
 import { uiAttrGet } from "../tools/ui_attr_get.js";
 import type { ExecFn } from "../runner.js";
 
-function makeExec(stdout: string): ExecFn {
+const ALL_ATTRS = { frame: "NSRect: {{0,0},{100,44}}", alpha: 1, hidden: false, text: "Hello" };
+
+function makeExec(attrs = ALL_ATTRS): ExecFn {
   return vi.fn().mockImplementation(async (_bin: string, args: string[]) => {
     if ((args as string[]).includes("list"))
       return { stdout: JSON.stringify([{ bundleIdentifier: "com.test", port: 1234 }]), stderr: "" };
-    return { stdout, stderr: "" };
+    return { stdout: JSON.stringify({ attributes: attrs }), stderr: "" };
   });
 }
 
 describe("uiAttrGet", () => {
-  it("calls attr get <oid> --attr <keys> --json --session", async () => {
-    const exec = makeExec('{"frame":{"x":0,"y":0,"width":100,"height":44}}') as ReturnType<typeof vi.fn>;
+  it("calls attr get <oid> --json --session (no --attr flag)", async () => {
+    const exec = makeExec() as ReturnType<typeof vi.fn>;
     await uiAttrGet({ oid: "9999", attrs: ["frame"], session: "com.test@1234" }, exec);
     expect(exec.mock.calls[0][1]).toEqual([
-      "attr", "get", "9999", "--attr", "frame", "--json", "--session", "com.test@1234",
+      "attr", "get", "9999", "--json", "--session", "com.test@1234",
     ]);
   });
 
-  it("supports multiple attr keys", async () => {
-    const exec = makeExec('{"frame":{},"backgroundColor":"#FFF"}') as ReturnType<typeof vi.fn>;
-    await uiAttrGet({ oid: "9999", attrs: ["frame", "backgroundColor"], session: "com.test@1234" }, exec);
-    const args = exec.mock.calls[0][1] as string[];
-    expect(args).toContain("frame");
-    expect(args).toContain("backgroundColor");
+  it("returns only requested attrs when attrs specified", async () => {
+    const exec = makeExec();
+    const result = await uiAttrGet({ oid: "9999", attrs: ["frame", "alpha"], session: "com.test@1234" }, exec);
+    expect(Object.keys(result).sort()).toEqual(["alpha", "frame"]);
+    expect(result.frame).toBe(ALL_ATTRS.frame);
   });
 
-  it("returns parsed attribute map", async () => {
-    const attrMap = { frame: { x: 0, y: 100, width: 320, height: 44 }, text: "Hello" };
-    const exec = makeExec(JSON.stringify(attrMap));
-    const result = await uiAttrGet({ oid: "9999", attrs: ["frame", "text"], session: "com.test@1234" }, exec);
-    expect(result).toEqual(attrMap);
+  it("returns all attrs when attrs not specified", async () => {
+    const exec = makeExec();
+    const result = await uiAttrGet({ oid: "9999", session: "com.test@1234" }, exec);
+    expect(Object.keys(result).length).toBe(4);
+  });
+
+  it("returns empty object when no requested attrs exist", async () => {
+    const exec = makeExec();
+    const result = await uiAttrGet({ oid: "9999", attrs: ["nonexistent"], session: "com.test@1234" }, exec);
+    expect(result).toEqual({});
   });
 
   it("throws on invalid JSON", async () => {
-    const exec = makeExec("bad");
-    await expect(uiAttrGet({ oid: "9999", attrs: ["frame"], session: "com.test@1234" }, exec))
+    const exec = vi.fn().mockResolvedValue({ stdout: "bad", stderr: "" });
+    await expect(uiAttrGet({ oid: "9999", session: "com.test@1234" }, exec as ExecFn))
       .rejects.toThrow("Failed to parse JSON");
   });
 });
