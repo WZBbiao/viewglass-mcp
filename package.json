@@ -10,7 +10,8 @@
   "files": [
     "dist/",
     "bin/",
-    ".viewglass-cli-version"
+    ".viewglass-cli-version",
+    ".viewglass-server-min-version"
   ],
   "scripts": {
     "build": "tsc",
