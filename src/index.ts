@@ -27,6 +27,7 @@ import { uiInvoke } from "./tools/ui_invoke.js";
 import { uiWait } from "./tools/ui_wait.js";
 import { uiAssert } from "./tools/ui_assert.js";
 import { uiScan } from "./tools/ui_scan.js";
+import { uiConnect } from "./tools/ui_connect.js";
 import { uiScreenshot } from "./tools/ui_screenshot.js";
 import { uiInput } from "./tools/ui_input.js";
 import { uiSwipe } from "./tools/ui_swipe.js";
@@ -487,9 +488,12 @@ server.registerTool(
   "ui_scan",
   {
     description:
-      "ALWAYS call this first before any other Viewglass tool. " +
-      "Scans for running iOS apps with ViewglassServer integrated. " +
-      "If sessions are found: pass the session string to other tools. " +
+      "Scan for all running iOS apps with ViewglassServer integrated. " +
+      "Use this when you don't know the target app's bundle ID, or when ui_connect fails. " +
+      "If you already know the bundle ID, prefer ui_connect directly — it's faster. " +
+      "If sessions are found: check that the bundleId matches the app you intend to inspect. " +
+      "If the session does not match, call ui_connect with the target bundleId to switch apps. " +
+      "Never give up just because the session bundleId is different from the target app. " +
       "If sessions is empty: the result includes a complete setupGuide — " +
       "read it and help the user add ViewglassServer to their iOS project " +
       "(SPM or CocoaPods, Debug only), then ask them to build & run the app " +
@@ -500,6 +504,38 @@ server.registerTool(
   async () => {
     try {
       const result = await uiScan();
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (e) {
+      return { isError: true, content: [{ type: "text", text: String(e) }] };
+    }
+  }
+);
+
+// ─── ui_connect ───────────────────────────────────────────────────────────────
+
+server.registerTool(
+  "ui_connect",
+  {
+    description:
+      "Connect to a specific iOS app by bundle ID. " +
+      "This is the preferred first step — infer the bundle ID from the project files " +
+      "(Info.plist, .xcodeproj, or Package.swift) and call this directly instead of ui_scan. " +
+      "Partial bundle ID is supported (e.g. 'ViewglassDemo' matches 'com.wzb.ViewglassDemo'). " +
+      "Returns a session string (bundleId@port) — pass it to all other Viewglass tools. " +
+      "If the app is not found: ask the user to build and run it in Xcode (Debug scheme) and try again. " +
+      "Fall back to ui_scan only if the bundle ID cannot be determined from the project.",
+    inputSchema: {
+      bundleId: z
+        .string()
+        .describe(
+          "Bundle ID or partial name of the target app (e.g. 'com.myapp.Foo' or 'Foo')."
+        ),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ bundleId }) => {
+    try {
+      const result = await uiConnect({ bundleId });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (e) {
       return { isError: true, content: [{ type: "text", text: String(e) }] };

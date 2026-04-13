@@ -102,7 +102,10 @@ const SETUP_GUIDE: ViewglassSetupGuide = {
  *
  * Workflow:
  *   1. Call ui_scan
- *   2a. Sessions found → pass session to other tools
+ *   2a. Sessions found → verify bundleId matches the target app.
+ *       If it matches, pass the session string to other tools.
+ *       If it does NOT match, ask the user to build & run the correct app in Xcode (Debug),
+ *       then call ui_scan again until the right app appears.
  *   2b. Sessions empty → read setupGuide, help user integrate ViewglassServer,
  *       then ask them to build & run the app, then call ui_scan again
  */
@@ -138,6 +141,10 @@ export async function uiScan(exec?: ExecFn): Promise<UIScanResult> {
 
   return {
     sessions,
-    message: `Found ${sessions.length} session(s): ${sessions.map((s) => s.session).join(", ")}`,
+    message:
+      `Found ${sessions.length} session(s): ${sessions.map((s) => s.session).join(", ")}. ` +
+      "Verify that the bundleId matches the iOS app you intend to inspect. " +
+      "If none of the sessions match, ask the user to build and run the correct app " +
+      "in Xcode (Debug scheme), then call ui_scan again.",
   };
 }

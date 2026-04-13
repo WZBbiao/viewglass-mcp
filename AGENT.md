@@ -121,9 +121,11 @@ Wait for confirmation before proceeding.
 
 ---
 
-## Step 5 — Verify
+## Step 5 — Connect
 
-Call the `ui_scan` MCP tool.
+Infer the app's bundle ID from the project (check `Info.plist`, `.xcodeproj`, or `Package.swift`),
+then call `ui_connect` with that bundle ID.
 
-- **Sessions found** → setup complete, you can now use all 16 Viewglass tools.
-- **Sessions empty** → check: (1) app is running in Debug, (2) LookinServer is linked to the app target, (3) MCP config was saved and client was restarted.
+- **Session returned** → setup complete, pass the session string to all other Viewglass tools.
+- **App not found** → check: (1) app is running in Debug scheme, (2) LookinServer is linked to the app target, (3) MCP config was saved and client was restarted. Then retry `ui_connect`.
+- **Bundle ID unknown** → fall back to `ui_scan` to see what sessions are available.
