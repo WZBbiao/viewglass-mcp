@@ -11,19 +11,98 @@ export interface UISessionInfo {
   session: string;
 }
 
+export interface ViewglassSetupGuide {
+  summary: string;
+  spm: string;
+  cocoapods: string;
+  appCode: string;
+  verify: string;
+}
+
 export interface UIScanResult {
   /** All running Viewglass sessions. Empty if none found. */
   sessions: UISessionInfo[];
   /** Human-readable status. */
   message: string;
+  /**
+   * Only present when sessions is empty.
+   * Step-by-step integration guide for adding ViewglassServer to an iOS project.
+   * Read this, then help the user apply the correct integration method.
+   */
+  setupGuide?: ViewglassSetupGuide;
 }
+
+const SETUP_GUIDE: ViewglassSetupGuide = {
+  summary:
+    "ViewglassServer is not running in any app. To use Viewglass tools, " +
+    "the iOS project must embed ViewglassServer (Debug builds only). " +
+    "Follow one of the integration steps below, then build & run the app on a simulator or device.",
+
+  spm:
+    "## Swift Package Manager (recommended)\n\n" +
+    "1. In Xcode: File → Add Package Dependencies…\n" +
+    "2. Enter URL: https://github.com/WZBbiao/ViewglassServer.git\n" +
+    "3. Select version: 0.1.0 (or latest)\n" +
+    "4. Add the `LookinServer` library to the **app target** (not a framework target)\n" +
+    "5. In the target's Build Phases → Link Binary With Libraries, " +
+    "set LookinServer to **Optional** (prevents linker errors in Release)\n\n" +
+    "Or in Package.swift:\n" +
+    "```swift\n" +
+    '.package(url: "https://github.com/WZBbiao/ViewglassServer.git", from: "0.1.0")\n' +
+    "// then in target dependencies:\n" +
+    '.product(name: "LookinServer", package: "ViewglassServer")\n' +
+    "```",
+
+  cocoapods:
+    "## CocoaPods\n\n" +
+    "Add to your Podfile (Swift project):\n" +
+    "```ruby\n" +
+    "pod 'LookinServer',\n" +
+    "  :git => 'https://github.com/WZBbiao/ViewglassServer.git',\n" +
+    "  :tag => '0.1.0',\n" +
+    "  :subspecs => ['Swift'],\n" +
+    "  :configurations => ['Debug']\n" +
+    "```\n\n" +
+    "Then run: `pod install`",
+
+  appCode:
+    "## Import in AppDelegate / App entry point\n\n" +
+    "Add the import — no other initialization code is needed:\n\n" +
+    "Swift:\n" +
+    "```swift\n" +
+    "#if DEBUG\n" +
+    "import LookinServer\n" +
+    "#endif\n" +
+    "```\n\n" +
+    "Objective-C:\n" +
+    "```objc\n" +
+    "#if DEBUG\n" +
+    "@import LookinServer;\n" +
+    "#endif\n" +
+    "```",
+
+  verify:
+    "## Verify\n\n" +
+    "1. Build and run the app on a simulator or connected device (Debug scheme)\n" +
+    "2. Call `ui_scan` again — it should list the running session\n\n" +
+    "If ui_scan still returns empty after running the app:\n" +
+    "- Confirm you are running a Debug build (not Release)\n" +
+    "- Confirm LookinServer is linked to the app target, not only a framework",
+};
 
 /**
  * Scan for running Viewglass sessions.
- * Returns all app sessions available for inspection.
  *
- * Call this first if you don't know the session string, or to confirm the
- * target app is running. Pass the returned session value to other tools.
+ * **Always call this first.** It tells you:
+ * - Which apps are available for inspection (use the session string with other tools)
+ * - If no app is running: returns a complete ViewglassServer integration guide
+ *   so you can help the user add the dependency to their iOS project.
+ *
+ * Workflow:
+ *   1. Call ui_scan
+ *   2a. Sessions found → pass session to other tools
+ *   2b. Sessions empty → read setupGuide, help user integrate ViewglassServer,
+ *       then ask them to build & run the app, then call ui_scan again
  */
 export async function uiScan(exec?: ExecFn): Promise<UIScanResult> {
   const fn = exec ?? defaultExec;
@@ -44,10 +123,19 @@ export async function uiScan(exec?: ExecFn): Promise<UIScanResult> {
     session: `${a.bundleIdentifier}@${a.port}`,
   }));
 
-  const message =
-    sessions.length === 0
-      ? "No Viewglass sessions found. Ensure the app is running with ViewglassServer integrated."
-      : `Found ${sessions.length} session(s): ${sessions.map((s) => s.session).join(", ")}`;
+  if (sessions.length === 0) {
+    return {
+      sessions,
+      message:
+        "No Viewglass sessions found. Read setupGuide and help the user " +
+        "integrate ViewglassServer into their iOS project, then ask them to " +
+        "build & run the app and call ui_scan again.",
+      setupGuide: SETUP_GUIDE,
+    };
+  }
 
-  return { sessions, message };
+  return {
+    sessions,
+    message: `Found ${sessions.length} session(s): ${sessions.map((s) => s.session).join(", ")}`,
+  };
 }

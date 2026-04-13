@@ -479,10 +479,13 @@ server.registerTool(
   "ui_scan",
   {
     description:
-      "Scan for running Viewglass sessions (inspectable iOS apps). " +
-      "Returns all available sessions with bundleId, port, and ready-to-use session string. " +
-      "Call this first when you don't know the session, or to verify the app is running. " +
-      "Pass the session value to other tools to target a specific app.",
+      "ALWAYS call this first before any other Viewglass tool. " +
+      "Scans for running iOS apps with ViewglassServer integrated. " +
+      "If sessions are found: pass the session string to other tools. " +
+      "If sessions is empty: the result includes a complete setupGuide — " +
+      "read it and help the user add ViewglassServer to their iOS project " +
+      "(SPM or CocoaPods, Debug only), then ask them to build & run the app " +
+      "and call ui_scan again to verify.",
     inputSchema: {},
     annotations: { readOnlyHint: true },
   },
