@@ -50,6 +50,9 @@ brew install node
 
 First, locate the iOS project root (directory containing `*.xcodeproj` or `Package.swift` for the app).
 
+Check the latest release tag at: `https://github.com/WZBbiao/ViewglassServer/releases/latest`
+Use that tag for the version in the snippets below.
+
 ### Detect integration method
 
 - If a `Podfile` exists in the project → use **CocoaPods**
@@ -57,20 +60,17 @@ First, locate the iOS project root (directory containing `*.xcodeproj` or `Packa
 
 ### Swift Package Manager
 
-1. Open `Package.swift` (app package) or the Xcode project's SPM dependencies.
+If the target is an Xcode project (no top-level `Package.swift`), instruct the user:
+> File → Add Package Dependencies → `https://github.com/WZBbiao/ViewglassServer.git` → choose the latest version → add `LookinServer` to the app target
 
-   If the target is an Xcode project (no top-level `Package.swift`), instruct
-   the user to add the package in Xcode:
-   > File → Add Package Dependencies → `https://github.com/WZBbiao/ViewglassServer.git` → version `0.1.0` → add `LookinServer` to the app target
-
-   If `Package.swift` exists, add to dependencies:
-   ```swift
-   .package(url: "https://github.com/WZBbiao/ViewglassServer.git", from: "0.1.0")
-   ```
-   And to the app target:
-   ```swift
-   .product(name: "LookinServer", package: "ViewglassServer")
-   ```
+If `Package.swift` exists, add to dependencies:
+```swift
+.package(url: "https://github.com/WZBbiao/ViewglassServer.git", from: "<latest-tag>")
+```
+And to the app target:
+```swift
+.product(name: "LookinServer", package: "ViewglassServer")
+```
 
 ### CocoaPods
 
@@ -78,7 +78,7 @@ Add to `Podfile` inside the app target block:
 ```ruby
 pod 'LookinServer',
   :git => 'https://github.com/WZBbiao/ViewglassServer.git',
-  :tag => '0.1.0',
+  :tag => '<latest-tag>',
   :subspecs => ['Swift'],
   :configurations => ['Debug']
 ```
@@ -90,30 +90,21 @@ pod install
 
 ---
 
-## Step 3 — Import LookinServer in the app entry point
+## Step 3 — Import LookinServer (SPM only)
 
-Find the app entry point. In order of preference:
-1. `AppDelegate.swift` — look for `@UIApplicationMain` or `UIApplicationDelegate`
-2. `App.swift` — look for `@main` and `App` protocol
-3. Objective-C: `AppDelegate.m`
+LookinServer uses an ObjC `+load` method to start automatically when linked —
+no initialization code is required.
 
-Add the import at the top of the file (after existing imports):
+**CocoaPods:** skip this step.
 
-**Swift:**
+**SPM:** add a defensive import to prevent the linker from dead-stripping the module.
+Find the app entry point (`AppDelegate.swift`, `App.swift`, or `AppDelegate.m`) and add:
+
 ```swift
 #if DEBUG
 import LookinServer
 #endif
 ```
-
-**Objective-C:**
-```objc
-#if DEBUG
-@import LookinServer;
-#endif
-```
-
-No other initialization code is needed. The server starts automatically on import.
 
 ---
 
@@ -131,14 +122,4 @@ Wait for confirmation before proceeding.
 Call the `ui_scan` MCP tool.
 
 - **Sessions found** → setup complete, you can now use all 16 Viewglass tools.
-- **Sessions empty** → check: (1) app is running in Debug, (2) LookinServer import was added, (3) MCP config was saved and client was restarted.
-
----
-
-## Version compatibility
-
-| viewglass-mcp | bundled CLI | ViewglassServer |
-|---|---|---|
-| 0.1.0 | 0.1.0 | ≥ 0.1.0 |
-
-Current versions are in `.viewglass-cli-version` and `.viewglass-server-min-version` inside the npm package.
+- **Sessions empty** → check: (1) app is running in Debug, (2) LookinServer is linked to the app target, (3) MCP config was saved and client was restarted.

@@ -40,34 +40,36 @@ const SETUP_GUIDE: ViewglassSetupGuide = {
 
   spm:
     "## Swift Package Manager (recommended)\n\n" +
+    "Check the latest release tag at https://github.com/WZBbiao/ViewglassServer/releases/latest first.\n\n" +
     "1. In Xcode: File → Add Package Dependencies…\n" +
     "2. Enter URL: https://github.com/WZBbiao/ViewglassServer.git\n" +
-    "3. Select version: 0.1.0 (or latest)\n" +
-    "4. Add the `LookinServer` library to the **app target** (not a framework target)\n" +
-    "5. In the target's Build Phases → Link Binary With Libraries, " +
-    "set LookinServer to **Optional** (prevents linker errors in Release)\n\n" +
+    "3. Select the latest release version\n" +
+    "4. Add the `LookinServer` library to the **app target** (not a framework target)\n\n" +
     "Or in Package.swift:\n" +
     "```swift\n" +
-    '.package(url: "https://github.com/WZBbiao/ViewglassServer.git", from: "0.1.0")\n' +
+    '.package(url: "https://github.com/WZBbiao/ViewglassServer.git", from: "<latest-tag>")\n' +
     "// then in target dependencies:\n" +
     '.product(name: "LookinServer", package: "ViewglassServer")\n' +
     "```",
 
   cocoapods:
     "## CocoaPods\n\n" +
+    "Check the latest release tag at https://github.com/WZBbiao/ViewglassServer/releases/latest first.\n\n" +
     "Add to your Podfile (Swift project):\n" +
     "```ruby\n" +
     "pod 'LookinServer',\n" +
     "  :git => 'https://github.com/WZBbiao/ViewglassServer.git',\n" +
-    "  :tag => '0.1.0',\n" +
+    "  :tag => '<latest-tag>',\n" +
     "  :subspecs => ['Swift'],\n" +
     "  :configurations => ['Debug']\n" +
     "```\n\n" +
     "Then run: `pod install`",
 
   appCode:
-    "## Import in AppDelegate / App entry point\n\n" +
-    "Add the import — no other initialization code is needed:\n\n" +
+    "## Import in AppDelegate / App entry point (SPM only)\n\n" +
+    "LookinServer uses ObjC `+load` to start automatically — no initialization code needed.\n\n" +
+    "**CocoaPods:** skip this step. CocoaPods links with `-ObjC`, so `+load` runs automatically.\n\n" +
+    "**SPM:** add a defensive import to prevent the linker from dead-stripping the module:\n\n" +
     "Swift:\n" +
     "```swift\n" +
     "#if DEBUG\n" +
