@@ -22,11 +22,15 @@ Choose the config file for the AI client in use:
 
 | Client | Config file |
 |---|---|
-| Claude Code | `.claude/settings.json` in the project, or `~/.claude.json` globally |
+| Claude Code | `.claude/settings.json` in project, or `~/.claude.json` globally |
 | Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` |
-| Cursor | `.cursor/mcp.json` in the project |
+| Cursor | `.cursor/mcp.json` in project |
+| Windsurf | `~/.codeium/windsurf/mcp_settings.json` |
+| VS Code (GitHub Copilot) | `.vscode/mcp.json` in project |
+| Cline | `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` |
+| Gemini CLI | `~/.gemini/settings.json` |
 
-Add this entry (create the file if it does not exist):
+All clients use the same JSON format. Add this entry (create the file if it does not exist):
 
 ```json
 {
