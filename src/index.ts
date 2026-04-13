@@ -92,13 +92,16 @@ server.registerTool(
       "Find UI nodes matching a locator. Returns an array of matching nodes with oid, " +
       "className, frame, accessibilityIdentifier, and other properties. " +
       "Use the returned oid values with ui_attr_get, ui_set_attr, or for invoke calls. " +
-      "Locator formats: '#accessibilityIdentifier', 'UIClassName', or numeric OID string. " +
+      "To search by visible text (Chinese supported): contains:\"substring\" — " +
+      "searches UILabel text, button title, accessibilityLabel, and accessibilityIdentifier all at once. " +
+      "Other locators: #accessibilityIdentifier, @\"exact label\", UIClassName, *ClassSuffix, " +
+      "oid:N, .visible/.hidden/.interactive, ancestor:Class, parent:Class, tag:N, AND/OR/NOT. " +
       "Do NOT use screenshot to find elements — use this tool instead.",
     inputSchema: {
       locator: z
         .string()
         .describe(
-          "Locator: '#accessibilityIdentifier', UIKit class name, or OID string."
+          "Locator: contains:\"substr\" (full-text search across all text fields) | #accessibilityId | @\"exact label\" | UIClassName | oid:N | .visible | .hidden | ancestor:Class | AND/OR/NOT"
         ),
       session: sessionSchema,
     },

@@ -3,10 +3,21 @@ import type { ExecFn } from "../runner.js";
 
 export interface UIQueryInput {
   /**
-   * Locator string — one of:
-   *  - `#accessibilityIdentifier` (e.g. `#submit_button`)
-   *  - UIKit class name (e.g. `UIButton`)
-   *  - Numeric OID string (e.g. `"4295229440"`)
+   * Locator string. To search by visible text, use:
+   *  - `contains:"partial string"` — full-text search across UILabel.text, button title,
+   *    accessibilityLabel, and accessibilityIdentifier (case-insensitive, supports Chinese)
+   *
+   * Other supported formats:
+   *  - `#accessibilityIdentifier` — exact accessibility identifier match
+   *  - `@"exact label"` or `@label` — exact accessibilityLabel match
+   *  - UIKit class name (e.g. `UIButton`, `UILabel`, `*ViewController`)
+   *  - `oid:123` or bare number — match by object ID
+   *  - `.visible` / `.hidden` / `.interactive` — visibility filter
+   *  - `ancestor:UIScrollView` — nodes inside a specific ancestor class
+   *  - `parent:UIView` — nodes whose direct parent matches
+   *  - `tag:42` — match by view tag
+   *  - Logical: `UIButton AND .visible`, `UILabel OR UITextView`, `NOT .hidden`
+   *  - Grouping: `(UIButton OR UILabel) AND ancestor:UITableViewCell`
    */
   locator: string;
   /** Viewglass session in bundleId@port format. Auto-detected if omitted. */
