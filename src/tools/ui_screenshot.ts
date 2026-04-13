@@ -50,8 +50,8 @@ export async function uiScreenshot(
   }
 
   const { stdout } = await runCLI(cliArgs, { session, exec });
-  const raw = parseJSON<{ path?: string; outputPath?: string }>(stdout, "ui_screenshot");
-  const savedPath: string = raw.path ?? raw.outputPath ?? outputPath;
+  const raw = parseJSON<{ path?: string; outputPath?: string; filePath?: string }>(stdout, "ui_screenshot");
+  const savedPath: string = raw.path ?? raw.filePath ?? raw.outputPath ?? outputPath;
 
   return { path: savedPath, locator: input.locator };
 }

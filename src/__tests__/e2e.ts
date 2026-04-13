@@ -134,7 +134,13 @@ async function runE2E() {
   await new Promise((r) => setTimeout(r, 500));
 
   try {
-    // ─── Ensure app is on Home tab ──────────────────────────────────────────
+    // ─── Initial state reset ────────────────────────────────────────────────
+    // Dismiss any open sheet/modal first (best-effort, silently fails if none open)
+    await client.callTool("ui_tap", { locator: "#dismiss_modal", session: SESSION });
+    await new Promise((r) => setTimeout(r, 300));
+    // Pop any pushed navigation stack (best-effort, silently fails if not in nav stack)
+    await client.callTool("ui_tap", { locator: "_UIButtonBarButton", session: SESSION });
+    await new Promise((r) => setTimeout(r, 300));
     // switch_tab_home exists on Feed/Forms but not Home. Silently no-ops when already home.
     await client.callTool("ui_tap", { locator: "#switch_tab_home", session: SESSION });
     await new Promise((r) => setTimeout(r, 400));
@@ -258,6 +264,224 @@ async function runE2E() {
       if (!data.figmaNodeUrl) throw new Error("missing figmaNodeUrl");
       if (!data.instructions?.includes("Figma MCP")) throw new Error("missing instructions");
     });
+
+    // ─── ui_scan ────────────────────────────────────────────────────────────
+    console.log("\n[ ui_scan ]");
+
+    await test("returns sessions array with the running app", async () => {
+      const data = await client.callToolJSON<{ sessions: Array<{ bundleId: string; session: string }> }>(
+        "ui_scan", {}
+      );
+      if (!Array.isArray(data.sessions)) throw new Error("missing sessions array");
+      if (data.sessions.length === 0) throw new Error("expected at least 1 session");
+      const found = data.sessions.find((s) => s.session === SESSION);
+      if (!found) throw new Error(`session '${SESSION}' not found in: ${JSON.stringify(data.sessions.map((s) => s.session))}`);
+    });
+
+    await test("session string has bundleId@port format", async () => {
+      const data = await client.callToolJSON<{ sessions: Array<{ session: string }> }>("ui_scan", {});
+      const s = data.sessions[0];
+      if (!s.session.includes("@")) throw new Error(`unexpected session format: ${s.session}`);
+    });
+
+    // ─── ui_invoke ──────────────────────────────────────────────────────────
+    console.log("\n[ ui_invoke ]");
+
+    let labelOid: string | undefined;
+    await test("resolve a UILabel OID for invoke tests", async () => {
+      const nodes = await client.callToolJSON<Array<{ oid?: number | string }>>(
+        "ui_query", { locator: "UILabel", session: SESSION }
+      );
+      labelOid = String(nodes[0]?.oid);
+      if (!labelOid || labelOid === "undefined") throw new Error("no UILabel found");
+    });
+
+    await test("invoke setNeedsLayout (void) returns returnValue field", async () => {
+      if (!labelOid) throw new Error("no label OID");
+      const data = await client.callToolJSON<{ selector?: string; returnValue?: unknown }>(
+        "ui_invoke", { selector: "setNeedsLayout", target: `oid:${labelOid}`, session: SESSION }
+      );
+      if (data.selector !== "setNeedsLayout") throw new Error(`unexpected selector: ${data.selector}`);
+      if (!("returnValue" in data)) throw new Error("missing returnValue field");
+    });
+
+    await test("invoke setAlpha: with arg changes alpha", async () => {
+      if (!labelOid) throw new Error("no label OID");
+      const data = await client.callToolJSON<{ selector?: string; args?: string[] }>(
+        "ui_invoke", { selector: "setAlpha:", target: `oid:${labelOid}`, args: ["0.6"], session: SESSION }
+      );
+      if (data.selector !== "setAlpha:") throw new Error(`unexpected selector: ${data.selector}`);
+      if (!data.args?.includes("0.6")) throw new Error(`args mismatch: ${JSON.stringify(data.args)}`);
+    });
+
+    // Restore alpha
+    await client.callTool("ui_invoke", { selector: "setAlpha:", target: `oid:${labelOid}`, args: ["1.0"], session: SESSION });
+
+    await test("invoke unknown selector returns isError=true", async () => {
+      if (!labelOid) throw new Error("no label OID");
+      const r = await client.callTool("ui_invoke", {
+        selector: "doesNotExistMethod__:", target: `oid:${labelOid}`, session: SESSION
+      });
+      if (!r.isError) throw new Error("expected isError=true for unknown selector");
+    });
+
+    // ─── ui_wait ────────────────────────────────────────────────────────────
+    console.log("\n[ ui_wait ]");
+
+    await test("wait appears UILabel returns met:true immediately", async () => {
+      const data = await client.callToolJSON<{ met?: boolean; pollCount?: number }>(
+        "ui_wait", { mode: "appears", locator: "UILabel", session: SESSION }
+      );
+      if (!data.met) throw new Error("expected met:true");
+      if (typeof data.pollCount !== "number") throw new Error("missing pollCount");
+    });
+
+    await test("wait appears #push_buttons_screen returns met:true", async () => {
+      const data = await client.callToolJSON<{ met?: boolean }>(
+        "ui_wait", { mode: "appears", locator: "#push_buttons_screen", timeout: 3, session: SESSION }
+      );
+      if (!data.met) throw new Error("expected met:true for #push_buttons_screen");
+    });
+
+    await test("wait gone __nonexistent__ returns isError=true (timeout)", async () => {
+      const r = await client.callTool("ui_wait", {
+        mode: "gone", locator: "UILabel", timeout: 1, session: SESSION
+      });
+      if (!r.isError) throw new Error("expected isError=true — UILabel never disappears");
+    });
+
+    await test("wait attr mode with missing key returns isError", async () => {
+      const r = await client.callTool("ui_wait", {
+        mode: "attr", locator: "UILabel", session: SESSION
+        // missing key — should fail
+      });
+      if (!r.isError) throw new Error("expected isError=true for missing key");
+    });
+
+    // ─── ui_assert ──────────────────────────────────────────────────────────
+    console.log("\n[ ui_assert ]");
+
+    await test("assert visible #push_buttons_screen passes", async () => {
+      const data = await client.callToolJSON<{ passed?: boolean; matchCount?: number }>(
+        "ui_assert", { mode: "visible", locator: "#push_buttons_screen", session: SESSION }
+      );
+      if (!data.passed) throw new Error("expected passed:true");
+      if (data.matchCount !== 1) throw new Error(`expected matchCount 1, got ${data.matchCount}`);
+    });
+
+    await test("assert visible __missing__ returns isError=true", async () => {
+      const r = await client.callTool("ui_assert", {
+        mode: "visible", locator: "#__absolutely_nonexistent_xyz__", session: SESSION
+      });
+      if (!r.isError) throw new Error("expected isError=true for missing locator");
+    });
+
+    await test("assert count UIButton min=1 passes", async () => {
+      const data = await client.callToolJSON<{ passed?: boolean }>(
+        "ui_assert", { mode: "count", locator: "UIButton", min: 1, session: SESSION }
+      );
+      if (!data.passed) throw new Error("expected passed:true for min=1 UIButton");
+    });
+
+    await test("assert count UIButton expected=999 returns isError=true", async () => {
+      const r = await client.callTool("ui_assert", {
+        mode: "count", locator: "UIButton", count: 999, session: SESSION
+      });
+      if (!r.isError) throw new Error("expected isError=true for count=999");
+    });
+
+    // ─── ui_screenshot ──────────────────────────────────────────────────────
+    console.log("\n[ ui_screenshot ]");
+
+    await test("full-screen screenshot returns path ending in .png", async () => {
+      const data = await client.callToolJSON<{ path?: string }>("ui_screenshot", { session: SESSION });
+      if (!data.path) throw new Error("missing path");
+      if (!data.path.endsWith(".png")) throw new Error(`expected .png path, got: ${data.path}`);
+    });
+
+    await test("node screenshot of #push_buttons_screen returns path and locator", async () => {
+      const data = await client.callToolJSON<{ path?: string; locator?: string }>(
+        "ui_screenshot", { locator: "#push_buttons_screen", session: SESSION }
+      );
+      if (!data.path) throw new Error("missing path");
+      if (data.locator !== "#push_buttons_screen") throw new Error(`unexpected locator: ${data.locator}`);
+    });
+
+    // ─── ui_input (navigate to forms first) ────────────────────────────────
+    console.log("\n[ ui_input ]");
+
+    await test("navigate to forms screen", async () => {
+      await client.callToolJSON("ui_tap", { locator: "#push_forms_screen", session: SESSION });
+      await new Promise((r) => setTimeout(r, 500));
+      // Verify we're on the forms screen
+      const r = await client.callTool("ui_assert", {
+        mode: "visible", locator: "#primary_text_field", session: SESSION
+      });
+      if (r.isError) throw new Error("forms screen did not appear");
+    });
+
+    await test("input text into #primary_text_field returns ok:true", async () => {
+      const data = await client.callToolJSON<{ ok?: boolean; text?: string }>(
+        "ui_input", { target: "#primary_text_field", text: "hello e2e", session: SESSION }
+      );
+      if (!data.ok) throw new Error("expected ok:true");
+      if (data.text !== "hello e2e") throw new Error(`unexpected text: ${data.text}`);
+    });
+
+    await test("back from forms screen", async () => {
+      await client.callToolJSON("ui_tap", { locator: "_UIButtonBarButton", session: SESSION });
+      await new Promise((r) => setTimeout(r, 500));
+    });
+
+    // ─── ui_swipe ───────────────────────────────────────────────────────────
+    console.log("\n[ ui_swipe ]");
+
+    await test("swipe UIScrollView down returns ok:true with target/direction/distance", async () => {
+      const data = await client.callToolJSON<{ ok?: boolean; target?: string; direction?: string; distance?: number }>(
+        "ui_swipe", { target: "UIScrollView", direction: "down", distance: 150, session: SESSION }
+      );
+      if (!data.ok) throw new Error("expected ok:true");
+      if (data.direction !== "down") throw new Error(`unexpected direction: ${data.direction}`);
+      if (data.distance !== 150) throw new Error(`unexpected distance: ${data.distance}`);
+    });
+
+    await test("swipe UIScrollView up returns ok:true", async () => {
+      const data = await client.callToolJSON<{ ok?: boolean }>(
+        "ui_swipe", { target: "UIScrollView", direction: "up", session: SESSION }
+      );
+      if (!data.ok) throw new Error("expected ok:true");
+    });
+
+    // ─── ui_dismiss (show a modal sheet, then dismiss it) ───────────────────
+    console.log("\n[ ui_dismiss ]");
+
+    await test("tap #show_home_sheet to present a modal sheet", async () => {
+      await client.callToolJSON("ui_tap", { locator: "#show_home_sheet", session: SESSION });
+      await new Promise((r) => setTimeout(r, 500));
+      // Modal is now presented; #dismiss_modal button visible inside it
+      const r = await client.callTool("ui_assert", {
+        mode: "visible", locator: "#dismiss_modal", session: SESSION
+      });
+      if (r.isError) throw new Error("modal did not appear");
+    });
+
+    await test("dismiss UINavigationController dismisses the modal and returns hierarchy", async () => {
+      // UINavigationController's container view can dismiss presented modals
+      const data = await client.callToolJSON<{ ok?: boolean; hierarchy?: unknown }>(
+        "ui_dismiss", { target: "UINavigationController", session: SESSION }
+      );
+      if (!data.ok) throw new Error(`expected ok:true, got ${JSON.stringify(data)}`);
+      if (!data.hierarchy) throw new Error("missing post-action hierarchy");
+    });
+
+    await test("modal gone after dismiss (home screen buttons visible)", async () => {
+      const wait = await client.callToolJSON<{ met?: boolean }>(
+        "ui_wait", { mode: "gone", locator: "#dismiss_modal", timeout: 3, session: SESSION }
+      );
+      if (!wait.met) throw new Error("#dismiss_modal did not disappear after dismiss");
+    });
+
+    await new Promise((r) => setTimeout(r, 300));
 
   } finally {
     client.close();
