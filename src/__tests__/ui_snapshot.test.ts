@@ -23,6 +23,20 @@ describe("uiSnapshot", () => {
     expect(call![1]).toContain("com.test@1234");
   });
 
+  it("includes --compact by default", async () => {
+    const exec = makeExec('{"windows":[]}') as ReturnType<typeof vi.fn>;
+    await uiSnapshot({ session: "com.test@1234" }, exec);
+    const call = exec.mock.calls.find((c: unknown[]) => (c[1] as string[]).includes("hierarchy")) as [string, string[], unknown] | undefined;
+    expect(call![1]).toContain("--compact");
+  });
+
+  it("omits --compact when compact=false", async () => {
+    const exec = makeExec('{"windows":[]}') as ReturnType<typeof vi.fn>;
+    await uiSnapshot({ session: "com.test@1234", compact: false }, exec);
+    const call = exec.mock.calls.find((c: unknown[]) => (c[1] as string[]).includes("hierarchy")) as [string, string[], unknown] | undefined;
+    expect(call![1]).not.toContain("--compact");
+  });
+
   it("appends --filter when provided", async () => {
     const exec = makeExec('{"windows":[]}') as ReturnType<typeof vi.fn>;
     await uiSnapshot({ session: "com.test@1234", filter: "UILabel" }, exec);

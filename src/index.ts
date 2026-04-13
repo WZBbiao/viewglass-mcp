@@ -49,9 +49,11 @@ server.registerTool(
   "ui_snapshot",
   {
     description:
-      "Fast and cheap — capture the full UI node hierarchy of the running iOS app. " +
-      "Returns a JSON tree of all windows, views, and nodes with className, frame, " +
+      "Capture the UI node hierarchy of the running iOS app. " +
+      "Returns a JSON tree of windows, views, and nodes with className, frame, " +
       "accessibilityIdentifier, and child relationships. " +
+      "By default returns compact output (oid/class/label/frame only) for fast consumption. " +
+      "Set compact=false to get the full hierarchy with all node metadata. " +
       "Preferred over screenshot for finding elements and understanding layout. " +
       "Use filter to narrow to a specific UIKit class (e.g. UILabel, UIButton). " +
       "Do NOT take a screenshot to inspect UI structure — use this tool instead.",
@@ -61,12 +63,18 @@ server.registerTool(
         .string()
         .optional()
         .describe("Only return nodes of this UIKit class name (e.g. UILabel)."),
+      compact: z
+        .boolean()
+        .optional()
+        .describe(
+          "Return compact output (oid/class/label/frame only). Default: true. Set false for full metadata."
+        ),
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ session, filter }) => {
+  async ({ session, filter, compact }) => {
     try {
-      const result = await uiSnapshot({ session, filter });
+      const result = await uiSnapshot({ session, filter, compact });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (e) {
       return { isError: true, content: [{ type: "text", text: String(e) }] };
