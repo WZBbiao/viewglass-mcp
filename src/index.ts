@@ -50,14 +50,12 @@ server.registerTool(
   "ui_snapshot",
   {
     description:
-      "Capture the UI node hierarchy of the running iOS app. " +
-      "Returns a JSON tree of windows, views, and nodes with className, frame, " +
-      "accessibilityIdentifier, and child relationships. " +
-      "By default returns compact output (oid/class/label/frame only) for fast consumption. " +
-      "Set compact=false to get the full hierarchy with all node metadata. " +
-      "Preferred over screenshot for finding elements and understanding layout. " +
-      "Use filter to narrow to a specific UIKit class (e.g. UILabel, UIButton). " +
-      "Do NOT take a screenshot to inspect UI structure — use this tool instead.",
+      "Capture the UI node hierarchy of the running iOS app as a structured JSON tree. " +
+      "Each node includes an oid (object ID) you can pass directly to ui_query, ui_tap, " +
+      "ui_set_attr, and other tools to interact with that element. " +
+      "This is the primary tool for understanding what is on screen and finding elements to act on. " +
+      "Compact output (default) is concise enough to read in one pass. " +
+      "Use filter to narrow to a specific UIKit class (e.g. UILabel, UIButton).",
     inputSchema: {
       session: sessionSchema,
       filter: z
@@ -552,11 +550,13 @@ server.registerTool(
   "ui_screenshot",
   {
     description:
-      "Capture a screenshot of the running app. " +
+      "Capture a screenshot of the running app as a PNG image. " +
+      "Use ONLY for visual confirmation (e.g. verifying a UI change looks correct) " +
+      "or side-by-side design comparison with compare_with_design. " +
+      "Do NOT use this to find or inspect elements — screenshots have no OIDs and cannot " +
+      "be used with other tools. Use ui_snapshot to get the element tree instead. " +
       "Without locator: captures the full screen. " +
-      "With locator: captures only the specified node (crop). " +
-      "Returns { path } with the absolute path to the saved PNG. " +
-      "Use compare_with_design if you need a Figma side-by-side comparison.",
+      "With locator: captures only the specified node (crop).",
     inputSchema: {
       locator: z
         .string()
