@@ -21,7 +21,7 @@ and verify the connection — no manual steps required.
 | `ui_snapshot` | Capture the full view hierarchy (JSON tree). Fast and cheap. |
 | `ui_query` | Find nodes by accessibility ID, class name, or OID. |
 | `ui_attr_get` | Get runtime attributes of a node by OID. |
-| `ui_tap` | Tap a node and return post-action hierarchy. |
+| `ui_tap` | Tap a node and return post-action hierarchy. Supports UIControl, gesture-backed views, UITableViewCell, and UICollectionViewCell. |
 | `ui_scroll` | Scroll a scroll view and return post-action hierarchy. |
 | `ui_set_attr` | Set an attribute on a node at runtime (live, no recompile). |
 | `ui_invoke` | Call any ObjC selector on any node — the highest-leverage tool. |

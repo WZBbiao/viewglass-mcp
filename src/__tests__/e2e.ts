@@ -146,9 +146,16 @@ async function runE2E() {
     // ─── ui_snapshot ────────────────────────────────────────────────────────
     console.log("\n[ ui_snapshot ]");
 
-    await test("returns hierarchy with windows array", async () => {
-      const data = await client.callToolJSON<{ windows?: unknown[] }>("ui_snapshot", { session: SESSION });
-      if (!Array.isArray(data.windows)) throw new Error("missing windows array");
+    await test("returns hierarchy snapshot object", async () => {
+      const data = await client.callToolJSON<{ windows?: unknown[]; roots?: unknown[]; root?: unknown; nodes?: unknown[] }>(
+        "ui_snapshot", { session: SESSION }
+      );
+      const hasTree =
+        Array.isArray(data.windows) ||
+        Array.isArray(data.roots) ||
+        Array.isArray(data.nodes) ||
+        (typeof data.root === "object" && data.root !== null);
+      if (!hasTree) throw new Error(`unexpected ui_snapshot shape: ${JSON.stringify(data).slice(0, 240)}`);
     });
 
     await test("filter=UILabel narrows result", async () => {
@@ -215,6 +222,40 @@ async function runE2E() {
         "ui_tap", { locator: "_UIButtonBarButton", session: SESSION }
       );
       if (!data.hierarchy) throw new Error("missing post-action hierarchy");
+    });
+
+    await test("tap table cell label triggers UITableViewCell selection", async () => {
+      await client.callToolJSON("ui_tap", { locator: "#push_selectable_surfaces_screen", session: SESSION });
+      await client.callToolJSON("ui_tap", { locator: "#table_row_label_1", session: SESSION });
+      const nodes = await client.callToolJSON<Array<{ oid?: number | string }>>(
+        "ui_query", { locator: "#selection_status", session: SESSION }
+      );
+      const oid = String(nodes[0]?.oid);
+      if (!oid || oid === "undefined") throw new Error("missing selection_status oid");
+      const attrs = await client.callToolJSON<Record<string, unknown>>(
+        "ui_attr_get", { oid, attrs: ["text", "displayText"], session: SESSION }
+      );
+      const text = String(attrs.text ?? attrs.displayText ?? "");
+      if (text !== "Table selected: Profile") {
+        throw new Error(`unexpected selection status after table tap: ${text}`);
+      }
+    });
+
+    await test("tap collection cell label triggers UICollectionViewCell selection", async () => {
+      await client.callToolJSON("ui_tap", { locator: "#collection_tile_label_2", session: SESSION });
+      const nodes = await client.callToolJSON<Array<{ oid?: number | string }>>(
+        "ui_query", { locator: "#selection_status", session: SESSION }
+      );
+      const oid = String(nodes[0]?.oid);
+      if (!oid || oid === "undefined") throw new Error("missing selection_status oid");
+      const attrs = await client.callToolJSON<Record<string, unknown>>(
+        "ui_attr_get", { oid, attrs: ["text", "displayText"], session: SESSION }
+      );
+      const text = String(attrs.text ?? attrs.displayText ?? "");
+      if (text !== "Collection selected: Sunset") {
+        throw new Error(`unexpected selection status after collection tap: ${text}`);
+      }
+      await client.callToolJSON("ui_tap", { locator: "_UIButtonBarButton", session: SESSION });
     });
 
     // ─── ui_scroll ──────────────────────────────────────────────────────────

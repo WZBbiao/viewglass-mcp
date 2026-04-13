@@ -10,6 +10,9 @@ It gives you 16 MCP tools to read the view hierarchy, query nodes, tap, scroll,
 input text, invoke any ObjC method, assert state, and take screenshots — all
 against a live running iOS app.
 
+`ui_tap` supports semantic taps on UIControl, gesture-backed views,
+UITableViewCell, and UICollectionViewCell, including labels nested inside cells.
+
 Stack:
 - **viewglass-mcp** — MCP server (this npm package, bundles the CLI binary)
 - **ViewglassServer** — iOS library embedded in the app (Debug builds only)

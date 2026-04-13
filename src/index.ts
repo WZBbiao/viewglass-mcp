@@ -167,6 +167,8 @@ server.registerTool(
   {
     description:
       "Tap a UI element. Locator must match exactly one visible node. " +
+      "Supports semantic taps on UIControl, UITapGestureRecognizer-backed views, " +
+      "UITableViewCell, and UICollectionViewCell, including nested labels inside a cell. " +
       "Automatically refreshes after tapping and returns the post-action hierarchy " +
       "so you can confirm navigation or state changes without a separate ui_snapshot call. " +
       "Returns { tapped: locator, hierarchy: <post-action snapshot> }.",
