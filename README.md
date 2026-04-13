@@ -3,6 +3,17 @@
 MCP Server for [Viewglass](https://github.com/WZBbiao/viewglass) iOS UI inspection.
 Exposes 16 tools for AI agents — bundles the `viewglass` CLI binary, no separate install required.
 
+## For AI Agents
+
+Give this link to any AI agent to set up the full stack autonomously:
+
+```
+https://raw.githubusercontent.com/WZBbiao/viewglass-mcp/main/AGENT.md
+```
+
+The agent will configure the MCP client, add ViewglassServer to the iOS project,
+and verify the connection — no manual steps required.
+
 ## Tools
 
 | Tool | Description |
