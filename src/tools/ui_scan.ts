@@ -115,7 +115,7 @@ export async function uiScan(exec?: ExecFn): Promise<UIScanResult> {
   let apps: Array<{ bundleIdentifier: string; port: number }> = [];
   try {
     const { stdout } = await fn(VIEWGLASS_BIN, ["apps", "list", "--json"], {
-      timeout: 8_000,
+      timeout: 15_000,
     });
     apps = parseJSON<typeof apps>(stdout, "ui_scan");
   } catch {

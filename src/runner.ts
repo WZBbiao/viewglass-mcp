@@ -66,7 +66,7 @@ export async function detectSession(exec?: ExecFn): Promise<string | undefined> 
   const fn = exec ?? defaultExec;
   try {
     const { stdout } = await fn(VIEWGLASS_BIN, ["apps", "list", "--json"], {
-      timeout: 5_000,
+      timeout: 15_000,
     });
     const apps = JSON.parse(stdout) as Array<{
       bundleIdentifier: string;
