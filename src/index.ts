@@ -2,8 +2,12 @@
 /**
  * Viewglass MCP Server
  *
- * Exposes 7 tools for AI agents to inspect and interact with iOS app UI at runtime:
- *   ui_snapshot, ui_query, ui_attr_get, ui_tap, ui_scroll, ui_set_attr, compare_with_design
+ * Exposes 16 tools for AI agents to inspect and interact with iOS app UI at runtime:
+ *   Read:        ui_scan, ui_snapshot, ui_query, ui_attr_get
+ *   Write:       ui_set_attr, ui_invoke
+ *   Interact:    ui_tap, ui_scroll, ui_swipe, ui_long_press, ui_input, ui_dismiss
+ *   Assert/Wait: ui_assert, ui_wait
+ *   Visual:      ui_screenshot, compare_with_design
  *
  * Requires the `viewglass` binary to be in PATH, or set VIEWGLASS_BIN env var.
  */
@@ -19,6 +23,15 @@ import { uiTap } from "./tools/ui_tap.js";
 import { uiScroll } from "./tools/ui_scroll.js";
 import { uiSetAttr } from "./tools/ui_set_attr.js";
 import { compareWithDesign } from "./tools/compare_with_design.js";
+import { uiInvoke } from "./tools/ui_invoke.js";
+import { uiWait } from "./tools/ui_wait.js";
+import { uiAssert } from "./tools/ui_assert.js";
+import { uiScan } from "./tools/ui_scan.js";
+import { uiScreenshot } from "./tools/ui_screenshot.js";
+import { uiInput } from "./tools/ui_input.js";
+import { uiSwipe } from "./tools/ui_swipe.js";
+import { uiLongPress } from "./tools/ui_long_press.js";
+import { uiDismiss } from "./tools/ui_dismiss.js";
 
 const server = new McpServer({
   name: "viewglass-mcp",
@@ -266,6 +279,374 @@ server.registerTool(
   async ({ figmaNodeUrl, locator, session }) => {
     try {
       const result = await compareWithDesign({ figmaNodeUrl, locator, session });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (e) {
+      return { isError: true, content: [{ type: "text", text: String(e) }] };
+    }
+  }
+);
+
+// ─── ui_invoke ────────────────────────────────────────────────────────────────
+
+server.registerTool(
+  "ui_invoke",
+  {
+    description:
+      "Invoke ANY ObjC selector on a UI node at runtime — the highest-leverage tool. " +
+      "Use for navigation (popViewControllerAnimated: true), layout (setNeedsLayout), " +
+      "data refresh (reloadData), and any custom method on any object. " +
+      "selector format: 'methodName' (no args) or 'method:withParam:' (one colon per arg). " +
+      "args: pass one value per colon in the selector, in order. " +
+      "Supported arg types: numbers ('42', '0.5'), bools ('true'/'false'), strings, " +
+      "CGPoint ('{x,y}'), CGRect ('{{x,y},{w,h}}'), nil ('nil'). " +
+      "Returns { target, selector, args, returnValue }.",
+    inputSchema: {
+      selector: z
+        .string()
+        .describe(
+          "ObjC selector: 'setNeedsLayout', 'setAlpha:', 'scrollToRow:atScrollPosition:animated:'"
+        ),
+      target: z
+        .string()
+        .describe("Locator: '#accessibilityIdentifier', class name, or OID."),
+      args: z
+        .array(z.string())
+        .optional()
+        .describe("Argument values in order. One per colon in the selector."),
+      session: z
+        .string()
+        .optional()
+        .describe("Session in bundleId@port format. Auto-detected if omitted."),
+    },
+    annotations: { destructiveHint: false },
+  },
+  async ({ selector, target, args, session }) => {
+    try {
+      const result = await uiInvoke({ selector, target, args, session });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (e) {
+      return { isError: true, content: [{ type: "text", text: String(e) }] };
+    }
+  }
+);
+
+// ─── ui_wait ──────────────────────────────────────────────────────────────────
+
+server.registerTool(
+  "ui_wait",
+  {
+    description:
+      "Poll until a UI condition is met or timeout elapses. " +
+      "Three modes: " +
+      "  'appears' — wait until locator matches ≥1 visible node; " +
+      "  'gone'    — wait until locator matches 0 nodes; " +
+      "  'attr'    — wait until a node attribute equals/contains a value. " +
+      "Returns { met, condition, elapsedSeconds, pollCount }. " +
+      "Use after navigation, async data loads, or animations. " +
+      "If met:false (timeout), tool returns isError:true.",
+    inputSchema: {
+      mode: z.enum(["appears", "gone", "attr"]).describe("Wait mode."),
+      locator: z
+        .string()
+        .describe("Locator: '#accessibilityIdentifier', class name, OID, or query expression."),
+      key: z
+        .string()
+        .optional()
+        .describe("Attribute key for attr mode (e.g. 'text', 'hidden')."),
+      equals: z
+        .string()
+        .optional()
+        .describe("Pass when attribute value exactly equals this (attr mode, case-sensitive)."),
+      contains: z
+        .string()
+        .optional()
+        .describe("Pass when attribute value contains this substring (attr mode, case-insensitive)."),
+      timeout: z.number().positive().optional().describe("Max seconds to wait (default 10)."),
+      intervalMs: z.number().int().positive().optional().describe("Poll interval in ms (default 500)."),
+      session: z
+        .string()
+        .optional()
+        .describe("Session in bundleId@port format. Auto-detected if omitted."),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ mode, locator, key, equals, contains, timeout, intervalMs, session }) => {
+    try {
+      let input: Parameters<typeof uiWait>[0];
+      if (mode === "attr") {
+        if (!key) {
+          return { isError: true, content: [{ type: "text", text: "ui_wait attr mode requires 'key'" }] };
+        }
+        input = { mode: "attr", locator, key, equals, contains, timeout, intervalMs, session };
+      } else {
+        input = { mode, locator, timeout, intervalMs, session };
+      }
+      const result = await uiWait(input);
+      if (!result.met) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                ...result,
+                hint: `Condition '${result.condition}' not met after ${result.elapsedSeconds.toFixed(1)}s (${result.pollCount} polls). Check locator or increase timeout.`,
+              }, null, 2),
+            },
+          ],
+        };
+      }
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (e) {
+      return { isError: true, content: [{ type: "text", text: String(e) }] };
+    }
+  }
+);
+
+// ─── ui_assert ────────────────────────────────────────────────────────────────
+
+server.registerTool(
+  "ui_assert",
+  {
+    description:
+      "Assert a UI condition — use to verify app state in agent workflows. " +
+      "Returns { passed, message } on success. Returns isError:true with details on failure. " +
+      "Four modes: " +
+      "  'visible' — assert ≥1 node matches and is visible; " +
+      "  'text'    — assert node display text equals/contains expected value; " +
+      "  'count'   — assert match count equals/min/max; " +
+      "  'attr'    — assert node attribute equals/contains expected value.",
+    inputSchema: {
+      mode: z.enum(["visible", "text", "count", "attr"]).describe("Assert mode."),
+      locator: z.string().describe("Locator: '#accessibilityIdentifier', class name, OID, or query expression."),
+      expected: z
+        .string()
+        .optional()
+        .describe("Expected text for 'text' mode."),
+      contains: z
+        .boolean()
+        .optional()
+        .describe("For text mode: use substring match (case-insensitive) instead of exact equality."),
+      count: z
+        .number()
+        .int()
+        .optional()
+        .describe("Exact expected count for 'count' mode."),
+      min: z.number().int().optional().describe("Min count for 'count' mode."),
+      max: z.number().int().optional().describe("Max count for 'count' mode."),
+      key: z.string().optional().describe("Attribute key for 'attr' mode."),
+      attrEquals: z.string().optional().describe("Expected attribute value (exact) for 'attr' mode."),
+      attrContains: z.string().optional().describe("Expected attribute substring for 'attr' mode."),
+      session: z
+        .string()
+        .optional()
+        .describe("Session in bundleId@port format. Auto-detected if omitted."),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ mode, locator, expected, contains, count, min, max, key, attrEquals, attrContains, session }) => {
+    try {
+      let input: Parameters<typeof uiAssert>[0];
+      if (mode === "visible") {
+        input = { mode: "visible", locator, session };
+      } else if (mode === "text") {
+        if (!expected) {
+          return { isError: true, content: [{ type: "text", text: "ui_assert text mode requires 'expected'" }] };
+        }
+        input = { mode: "text", locator, expected, contains: contains ?? false, session };
+      } else if (mode === "count") {
+        input = { mode: "count", locator, expected: count, min, max, session };
+      } else {
+        if (!key) {
+          return { isError: true, content: [{ type: "text", text: "ui_assert attr mode requires 'key'" }] };
+        }
+        input = { mode: "attr", locator, key, equals: attrEquals, contains: attrContains, session };
+      }
+      const result = await uiAssert(input);
+      if (!result.passed) {
+        return { isError: true, content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      }
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (e) {
+      return { isError: true, content: [{ type: "text", text: String(e) }] };
+    }
+  }
+);
+
+// ─── ui_scan ─────────────────────────────────────────────────────────────────
+
+server.registerTool(
+  "ui_scan",
+  {
+    description:
+      "Scan for running Viewglass sessions (inspectable iOS apps). " +
+      "Returns all available sessions with bundleId, port, and ready-to-use session string. " +
+      "Call this first when you don't know the session, or to verify the app is running. " +
+      "Pass the session value to other tools to target a specific app.",
+    inputSchema: {},
+    annotations: { readOnlyHint: true },
+  },
+  async () => {
+    try {
+      const result = await uiScan();
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (e) {
+      return { isError: true, content: [{ type: "text", text: String(e) }] };
+    }
+  }
+);
+
+// ─── ui_screenshot ────────────────────────────────────────────────────────────
+
+server.registerTool(
+  "ui_screenshot",
+  {
+    description:
+      "Capture a screenshot of the running app. " +
+      "Without locator: captures the full screen. " +
+      "With locator: captures only the specified node (crop). " +
+      "Returns { path } with the absolute path to the saved PNG. " +
+      "Use compare_with_design if you need a Figma side-by-side comparison.",
+    inputSchema: {
+      locator: z
+        .string()
+        .optional()
+        .describe("Capture a specific node instead of full screen. '#id', class name, or OID."),
+      outputPath: z
+        .string()
+        .optional()
+        .describe("Output file path (must end in .png). Defaults to a temp file."),
+      session: z
+        .string()
+        .optional()
+        .describe("Session in bundleId@port format. Auto-detected if omitted."),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ locator, outputPath, session }) => {
+    try {
+      const result = await uiScreenshot({ locator, outputPath, session });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (e) {
+      return { isError: true, content: [{ type: "text", text: String(e) }] };
+    }
+  }
+);
+
+// ─── ui_input ─────────────────────────────────────────────────────────────────
+
+server.registerTool(
+  "ui_input",
+  {
+    description:
+      "Enter text into a UITextField or UITextView. " +
+      "Dispatches text semantically via the field's input mechanism. " +
+      "Returns { target, text, ok: true } on success. " +
+      "Use ui_tap first to focus the field if needed.",
+    inputSchema: {
+      target: z.string().describe("Target locator: '#accessibilityIdentifier', class name, or OID."),
+      text: z.string().describe("Text to type into the field."),
+      session: z
+        .string()
+        .optional()
+        .describe("Session in bundleId@port format. Auto-detected if omitted."),
+    },
+  },
+  async ({ target, text, session }) => {
+    try {
+      const result = await uiInput({ target, text, session });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (e) {
+      return { isError: true, content: [{ type: "text", text: String(e) }] };
+    }
+  }
+);
+
+// ─── ui_swipe ─────────────────────────────────────────────────────────────────
+
+server.registerTool(
+  "ui_swipe",
+  {
+    description:
+      "Perform a swipe gesture on a UIScrollView. " +
+      "Unlike ui_scroll (contentOffset manipulation), ui_swipe fires a real gesture — " +
+      "use it for paging scroll views, carousels, and gesture-driven interactions. " +
+      "distance defaults to 200 pts if omitted.",
+    inputSchema: {
+      target: z.string().describe("Target locator: '#accessibilityIdentifier', class name, or OID."),
+      direction: z.enum(["up", "down", "left", "right"]).describe("Swipe direction."),
+      distance: z.number().positive().optional().describe("Swipe distance in pts (default 200)."),
+      animated: z.boolean().optional().describe("Animate with ease-in-out (default false)."),
+      session: z
+        .string()
+        .optional()
+        .describe("Session in bundleId@port format. Auto-detected if omitted."),
+    },
+  },
+  async ({ target, direction, distance, animated, session }) => {
+    try {
+      const result = await uiSwipe({ target, direction, distance, animated, session });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (e) {
+      return { isError: true, content: [{ type: "text", text: String(e) }] };
+    }
+  }
+);
+
+// ─── ui_long_press ────────────────────────────────────────────────────────────
+
+server.registerTool(
+  "ui_long_press",
+  {
+    description:
+      "Trigger a semantic long press on a UI node. " +
+      "Fires the long press gesture recognizer attached to the element. " +
+      "Use for context menus, preview interactions, and custom long-press handlers. " +
+      "Returns { target, ok: true }.",
+    inputSchema: {
+      target: z.string().describe("Target locator: '#accessibilityIdentifier', class name, or OID."),
+      session: z
+        .string()
+        .optional()
+        .describe("Session in bundleId@port format. Auto-detected if omitted."),
+    },
+  },
+  async ({ target, session }) => {
+    try {
+      const result = await uiLongPress({ target, session });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    } catch (e) {
+      return { isError: true, content: [{ type: "text", text: String(e) }] };
+    }
+  }
+);
+
+// ─── ui_dismiss ───────────────────────────────────────────────────────────────
+
+server.registerTool(
+  "ui_dismiss",
+  {
+    description:
+      "Dismiss a UIViewController (modal dismiss or navigation pop). " +
+      "Pass any view or node — Viewglass finds the hosting UIViewController automatically. " +
+      "Returns { target, ok: true, hierarchy } with the post-action UI state so you " +
+      "can confirm the screen changed without a separate ui_snapshot call. " +
+      "Prefer this over ui_invoke popViewControllerAnimated: for standard navigation.",
+    inputSchema: {
+      target: z
+        .string()
+        .describe(
+          "Target locator: '#accessibilityIdentifier', class name, or OID. Can be a view or view controller."
+        ),
+      session: z
+        .string()
+        .optional()
+        .describe("Session in bundleId@port format. Auto-detected if omitted."),
+    },
+  },
+  async ({ target, session }) => {
+    try {
+      const result = await uiDismiss({ target, session });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (e) {
       return { isError: true, content: [{ type: "text", text: String(e) }] };
