@@ -31,18 +31,18 @@ jobs:
           BASE="https://github.com/WZBbiao/viewglass/releases/download/viewglass-v${CLI_VERSION}"
 
           # arm64
-          curl -fL "${BASE}/viewglass-macos-arm64.tar.gz" -o arm64.tar.gz
+          curl -fL "${BASE}/viewglass-macos-arm64.tar.gz" -o viewglass-macos-arm64.tar.gz
           curl -fL "${BASE}/viewglass-macos-arm64.tar.gz.sha256" -o arm64.sha256
           sha256sum -c arm64.sha256
-          tar -xzf arm64.tar.gz
+          tar -xzf viewglass-macos-arm64.tar.gz
           mv viewglass bin/viewglass-darwin-arm64
           chmod +x bin/viewglass-darwin-arm64
 
           # x86_64
-          curl -fL "${BASE}/viewglass-macos-x86_64.tar.gz" -o x86_64.tar.gz
+          curl -fL "${BASE}/viewglass-macos-x86_64.tar.gz" -o viewglass-macos-x86_64.tar.gz
           curl -fL "${BASE}/viewglass-macos-x86_64.tar.gz.sha256" -o x86_64.sha256
           sha256sum -c x86_64.sha256
-          tar -xzf x86_64.tar.gz
+          tar -xzf viewglass-macos-x86_64.tar.gz
           mv viewglass bin/viewglass-darwin-x64
           chmod +x bin/viewglass-darwin-x64
 

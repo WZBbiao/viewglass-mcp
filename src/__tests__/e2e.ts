@@ -12,9 +12,7 @@ import { join, dirname } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SERVER_ENTRY = join(__dirname, "../../dist/index.js");
-const VIEWGLASS_BIN =
-  process.env.VIEWGLASS_BIN ??
-  "/Users/wangzhenbiao/works/lookin/.build/release/viewglass";
+const VIEWGLASS_BIN = process.env.VIEWGLASS_BIN;
 
 // ─── MCP Client helpers ───────────────────────────────────────────────────────
 

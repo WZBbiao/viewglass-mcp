@@ -2,11 +2,21 @@
   "name": "viewglass-mcp",
   "version": "0.1.0",
   "description": "MCP Server for Viewglass iOS UI inspection — bundles the viewglass CLI binary",
+  "license": "GPL-3.0-only",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
     "viewglass-mcp": "dist/index.js"
   },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/WZBbiao/viewglass-mcp.git"
+  },
+  "homepage": "https://github.com/WZBbiao/viewglass-mcp",
+  "keywords": ["mcp", "ios", "ui-automation", "viewglass", "ai", "claude", "inspector"],
   "files": [
     "dist/",
     "bin/",
