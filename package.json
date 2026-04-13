@@ -1,18 +1,23 @@
 {
   "name": "viewglass-mcp",
   "version": "0.1.0",
-  "description": "MCP Server for Viewglass iOS UI inspection tool",
+  "description": "MCP Server for Viewglass iOS UI inspection — bundles the viewglass CLI binary",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
     "viewglass-mcp": "dist/index.js"
   },
+  "files": [
+    "dist/",
+    "bin/",
+    ".viewglass-cli-version"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "npm run build && VIEWGLASS_BIN=/Users/wangzhenbiao/works/lookin/.build/release/viewglass npx tsx src/__tests__/e2e.ts"
+    "test:e2e": "npm run build && npx tsx src/__tests__/e2e.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1"

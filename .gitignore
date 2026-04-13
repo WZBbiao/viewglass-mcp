@@ -1,5 +1,6 @@
 node_modules/
 dist/
+bin/
 *.js.map
 .DS_Store
 todo.md

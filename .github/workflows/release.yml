@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Read CLI version
+        id: cli_version
+        run: echo "version=$(cat .viewglass-cli-version | tr -d '[:space:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Download viewglass binaries
+        env:
+          CLI_VERSION: ${{ steps.cli_version.outputs.version }}
+        run: |
+          mkdir -p bin
+          BASE="https://github.com/WZBbiao/viewglass/releases/download/viewglass-v${CLI_VERSION}"
+
+          # arm64
+          curl -fL "${BASE}/viewglass-macos-arm64.tar.gz" -o arm64.tar.gz
+          curl -fL "${BASE}/viewglass-macos-arm64.tar.gz.sha256" -o arm64.sha256
+          sha256sum -c arm64.sha256
+          tar -xzf arm64.tar.gz
+          mv viewglass bin/viewglass-darwin-arm64
+          chmod +x bin/viewglass-darwin-arm64
+
+          # x86_64
+          curl -fL "${BASE}/viewglass-macos-x86_64.tar.gz" -o x86_64.tar.gz
+          curl -fL "${BASE}/viewglass-macos-x86_64.tar.gz.sha256" -o x86_64.sha256
+          sha256sum -c x86_64.sha256
+          tar -xzf x86_64.tar.gz
+          mv viewglass bin/viewglass-darwin-x64
+          chmod +x bin/viewglass-darwin-x64
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      - name: Set npm version from tag
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          npm version "$VERSION" --no-git-tag-version
+
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true

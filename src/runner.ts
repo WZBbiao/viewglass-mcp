@@ -1,10 +1,31 @@
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 
 const _execFile = promisify(execFile);
 
-/** Path to viewglass binary. Override with VIEWGLASS_BIN env var. */
-export const VIEWGLASS_BIN = process.env.VIEWGLASS_BIN ?? "viewglass";
+/**
+ * Resolve bundled viewglass binary shipped inside the npm package.
+ * Layout: <package-root>/bin/viewglass-darwin-{arm64|x64}
+ * Returns undefined in development (no bin/ dir) — falls back to PATH.
+ */
+function findBundledBinary(): string | undefined {
+  const distDir = dirname(fileURLToPath(import.meta.url));
+  const arch = process.arch === "arm64" ? "arm64" : "x64";
+  const p = join(distDir, "..", "bin", `viewglass-darwin-${arch}`);
+  return existsSync(p) ? p : undefined;
+}
+
+/**
+ * Resolution order:
+ *  1. VIEWGLASS_BIN env var (explicit override)
+ *  2. Bundled binary shipped with this npm package
+ *  3. "viewglass" in $PATH (development / Homebrew install)
+ */
+export const VIEWGLASS_BIN =
+  process.env.VIEWGLASS_BIN ?? findBundledBinary() ?? "viewglass";
 
 export interface RunResult {
   stdout: string;
