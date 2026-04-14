@@ -89,47 +89,31 @@ interface UISnapshotNode {
   className: string;
   oidType?: string;
   frame: RawRect;
-  depth: number;
-  parentOid?: number;
-  parentClassName?: string;
-  childrenOids: number[];
-  hostViewControllerClassName?: string | null;
-  hostViewControllerOid?: number | null;
+  controllerClass?: string | null;
   text?: string;
   searchableText: string[];
-  textSources: Record<string, string>;
   accessibilityIdentifier?: string | null;
-  accessibilityLabel?: string | null;
   visible: boolean;
   interactive: boolean;
   actions: string[];
   role: string;
   actionTargetOid: number;
   groupId?: string;
-  hints: string[];
 }
 
 interface UISnapshotGroup {
   id: string;
-  kind: "switcher";
   role: "bottomNavigation" | "topSwitcher";
-  containerOid?: number;
   containerClassName?: string;
   frame: RawRect;
   itemOids: number[];
   itemLabels: string[];
   selectedOid?: number | null;
-  selectionMode: "single";
-  hints: string[];
 }
 
 interface UISnapshotSummary {
   visibleText: string[];
   interactiveNodeCount: number;
-  textSearchHints: {
-    primaryTextFields: string[];
-    weakTextFields: string[];
-  };
   controllerHints: string[];
   bottomBarCandidates: Array<{
     groupId: string;
@@ -301,10 +285,8 @@ function buildSnapshotNode(
   const interactive = Boolean(node.isUserInteractionEnabled) && visible;
   const actionTargetOid = actionTargetByOid.get(node.oid) ?? node.primaryOid ?? node.oid;
   const group = groupByActionOid.get(actionTargetOid);
-  const parentClassName = node.parentOid ? nodesByOid.get(node.parentOid)?.className : undefined;
   const actions = inferActions(node, interactive);
   const role = inferRole(node, searchableText, actions, group);
-  const hints = inferHints(node, searchableText, group);
 
   return {
     id: `node_${node.oid}`,
@@ -313,24 +295,16 @@ function buildSnapshotNode(
     className: node.className,
     oidType: node.oidType,
     frame: node.frame,
-    depth: node.depth ?? 0,
-    parentOid: node.parentOid,
-    parentClassName,
-    childrenOids: node.childrenOids ?? [],
-    hostViewControllerClassName: node.hostViewControllerClassName,
-    hostViewControllerOid: node.hostViewControllerOid,
+    controllerClass: node.hostViewControllerClassName,
     text,
     searchableText,
-    textSources,
     accessibilityIdentifier: node.accessibilityIdentifier,
-    accessibilityLabel: node.accessibilityLabel,
     visible,
     interactive,
     actions,
     role,
     actionTargetOid,
     groupId: group?.id,
-    hints,
   };
 }
 
@@ -359,22 +333,11 @@ function inferRole(node: RawNode, searchableText: string[], actions: string[], g
   return "node";
 }
 
-function inferHints(node: RawNode, searchableText: string[], group?: UISnapshotGroup): string[] {
-  const hints: string[] = [];
-  if (group?.role === "bottomNavigation") hints.push("bottom_bar");
-  if (group?.role === "topSwitcher") hints.push("top_switcher");
-  if (group) hints.push("switcher_candidate");
-  if (searchableText.length > 0) hints.push("text_visible");
-  if (node.hostViewControllerClassName) hints.push("controller_hosted");
-  if (/Cell/i.test(node.className)) hints.push("list_cell");
-  return hints;
-}
-
 function shouldIncludeNode(node: UISnapshotNode, groupByActionOid: Map<number, UISnapshotGroup>): boolean {
   if (node.groupId) return true;
   if (node.searchableText.length > 0) return true;
-  if (node.accessibilityIdentifier || node.accessibilityLabel) return true;
-  if (node.hostViewControllerClassName) return true;
+  if (node.accessibilityIdentifier) return true;
+  if (node.controllerClass) return true;
   if (/Button|Label|Image|ScrollView|TableView|CollectionView|TextField|TextView|Cell|Tab|Navigation/i.test(node.className)) return true;
   return groupByActionOid.has(node.actionTargetOid);
 }
@@ -502,9 +465,7 @@ function makeGroup(
 
   return {
     id,
-    kind: "switcher",
     role,
-    containerOid: items[0]?.target.parentOid,
     containerClassName: undefined,
     frame: {
       x: Math.min(...xs),
@@ -515,14 +476,12 @@ function makeGroup(
     itemOids,
     itemLabels: labels,
     selectedOid: null,
-    selectionMode: "single",
-    hints: role === "bottomNavigation" ? ["bottom_edge", "switcher"] : ["top_edge", "switcher"],
   };
 }
 
 function buildSummary(hierarchy: RawHierarchy, nodes: UISnapshotNode[], groups: UISnapshotGroup[]): UISnapshotSummary {
   const visibleText = dedupeStrings(nodes.flatMap((node) => node.searchableText)).slice(0, 40);
-  const controllerHints = dedupeStrings(nodes.map((node) => node.hostViewControllerClassName ?? undefined));
+  const controllerHints = dedupeStrings(nodes.map((node) => node.controllerClass ?? undefined));
   const bottomBarCandidates = groups
     .filter((group) => group.role === "bottomNavigation")
     .map((group) => ({
@@ -537,10 +496,6 @@ function buildSummary(hierarchy: RawHierarchy, nodes: UISnapshotNode[], groups: 
   return {
     visibleText,
     interactiveNodeCount: nodes.filter((node) => node.interactive).length,
-    textSearchHints: {
-      primaryTextFields: ["customDisplayTitle", "displayText"],
-      weakTextFields: ["accessibilityLabel", "accessibilityIdentifier"],
-    },
     controllerHints,
     bottomBarCandidates,
     groupCount: groups.length,
