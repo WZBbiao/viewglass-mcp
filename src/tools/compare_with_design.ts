@@ -65,7 +65,7 @@ export async function compareWithDesign(
     args = ["screenshot", "screen", "--output", outputPath, "--json"];
   }
 
-  const { stdout } = await runCLI(args, { session, exec });
+  const { stdout } = await runCLI(args, { session, exec, timeoutMs: 30_000 });
   const result = parseJSON<{ filePath?: string; path?: string }>(stdout, "compare/screenshot");
   const savedPath = result.filePath ?? result.path ?? outputPath;
 

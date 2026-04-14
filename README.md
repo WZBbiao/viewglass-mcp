@@ -18,7 +18,7 @@ and verify the connection — no manual steps required.
 
 | Tool | Description |
 |---|---|
-| `ui_snapshot` | Capture the full view hierarchy (JSON tree). Fast and cheap. |
+| `ui_snapshot` | Capture an agent-first UI snapshot with summary, groups, searchable nodes, and optional rawTree. |
 | `ui_query` | Find nodes by accessibility ID, class name, or OID. |
 | `ui_attr_get` | Get runtime attributes of a node by OID. |
 | `ui_tap` | Tap a node and return post-action hierarchy. Supports UIControl, gesture-backed views, UITableViewCell, and UICollectionViewCell. |

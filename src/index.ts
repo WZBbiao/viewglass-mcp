@@ -50,12 +50,11 @@ server.registerTool(
   "ui_snapshot",
   {
     description:
-      "Capture the UI node hierarchy of the running iOS app as a structured JSON tree. " +
-      "Each node includes an oid (object ID) you can pass directly to ui_query, ui_tap, " +
-      "ui_set_attr, and other tools to interact with that element. " +
-      "This is the primary tool for understanding what is on screen and finding elements to act on. " +
-      "Compact output (default) is concise enough to read in one pass. " +
-      "Use filter to narrow to a specific UIKit class (e.g. UILabel, UIButton).",
+      "Capture the current UI as an agent-first snapshot. " +
+      "The result includes app/session metadata, a summary, inferred switcher/navigation groups, " +
+      "and a flattened node index with searchableText and actionTargetOid fields so agents can " +
+      "find targets without guessing UIKit class names. " +
+      "Use filter to narrow to a specific class or locator. Set compact=false only when you also need rawTree.",
     inputSchema: {
       session: sessionSchema,
       filter: z
@@ -66,7 +65,7 @@ server.registerTool(
         .boolean()
         .optional()
         .describe(
-          "Return compact output (oid/class/label/frame only). Default: true. Set false for full metadata."
+          "Default: true. Returns agent-first summary/groups/nodes only. Set false to also include rawTree."
         ),
     },
     annotations: { readOnlyHint: true },
@@ -230,12 +229,13 @@ server.registerTool(
       "no recompile needed. Use for visual debugging: tweak colors, fonts, or text " +
       "to match design spec, then read back with ui_attr_get to verify. " +
       "WARNING: Changes are ephemeral and reset on app relaunch. " +
-      "Requires node OID from ui_query. " +
+      "Accepts either a node OID or a locator; prefer locator in agent workflows. " +
       "Navigation patterns (get controller OID from ui_query, then use viewglass invoke): " +
       "  pop: invoke <navController-oid> popViewControllerAnimated: true — " +
       "  dismiss modal: invoke <vc-oid> dismissViewControllerAnimated:completion: true nil",
     inputSchema: {
-      oid: z.coerce.string().describe("Node OID from ui_query (number or string)."),
+      oid: z.coerce.string().optional().describe("Node OID from ui_query (number or string)."),
+      locator: z.string().optional().describe("Locator to resolve at execution time (preferred)."),
       attr: z
         .string()
         .describe(
@@ -250,9 +250,12 @@ server.registerTool(
     },
     annotations: { destructiveHint: true, idempotentHint: true },
   },
-  async ({ oid, attr, value, session }) => {
+  async ({ oid, locator, attr, value, session }) => {
     try {
-      const result = await uiSetAttr({ oid, attr, value, session });
+      if (!oid && !locator) {
+        return { isError: true, content: [{ type: "text", text: "ui_set_attr requires either 'oid' or 'locator'" }] };
+      }
+      const result = await uiSetAttr({ oid, locator, attr, value, session });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (e) {
       return { isError: true, content: [{ type: "text", text: String(e) }] };
@@ -403,7 +406,9 @@ server.registerTool(
               type: "text",
               text: JSON.stringify({
                 ...result,
-                hint: `Condition '${result.condition}' not met after ${result.elapsedSeconds.toFixed(1)}s (${result.pollCount} polls). Check locator or increase timeout.`,
+                hint: `Condition '${result.condition}' not met after ${
+                  typeof result.elapsedSeconds === "number" ? result.elapsedSeconds.toFixed(1) : "unknown"
+                }s (${typeof result.pollCount === "number" ? result.pollCount : "unknown"} polls). Check locator or increase timeout.`,
               }, null, 2),
             },
           ],

@@ -3,7 +3,9 @@ import type { ExecFn } from "../runner.js";
 
 export interface UISetAttrInput {
   /** Node OID obtained from ui_query. */
-  oid: string;
+  oid?: string;
+  /** Locator resolved by the CLI (preferred for stable E2E and agent flows). */
+  locator?: string;
   /** Attribute key to set (e.g. "backgroundColor", "alpha", "hidden", "text"). */
   attr: string;
   /**
@@ -28,12 +30,23 @@ export interface UISetAttrInput {
 export async function uiSetAttr(
   input: UISetAttrInput,
   exec?: ExecFn
-): Promise<{ oid: string; attr: string; value: string; ok: true }> {
+): Promise<{ oid?: string; locator?: string; attr: string; value: string; ok: true }> {
   const session = await resolveSession(input.session, exec);
+  const target = input.locator ?? input.oid;
+  if (!target) {
+    throw new Error("ui_set_attr requires either 'oid' or 'locator'");
+  }
   // CLI syntax: attr set <target> <key> <value> [--session <s>]
-  await runCLI(["attr", "set", input.oid, input.attr, input.value], {
+  await runCLI(["attr", "set", target, input.attr, input.value], {
     session,
     exec,
+    timeoutMs: 30_000,
   });
-  return { oid: input.oid, attr: input.attr, value: input.value, ok: true };
+  return {
+    oid: input.oid,
+    locator: input.locator,
+    attr: input.attr,
+    value: input.value,
+    ok: true,
+  };
 }

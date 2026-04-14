@@ -158,21 +158,34 @@ async function runE2E() {
     // ─── ui_snapshot ────────────────────────────────────────────────────────
     console.log("\n[ ui_snapshot ]");
 
-    await test("returns hierarchy snapshot object", async () => {
-      const data = await client.callToolJSON<{ windows?: unknown[]; roots?: unknown[]; root?: unknown; nodes?: unknown[] }>(
+    await test("returns agent-first snapshot object", async () => {
+      const data = await client.callToolJSON<{
+        app?: unknown;
+        snapshot?: unknown;
+        summary?: { visibleText?: unknown[]; bottomBarCandidates?: unknown[] };
+        groups?: unknown[];
+        nodes?: Array<{ searchableText?: unknown[]; actionTargetOid?: unknown }>;
+      }>(
         "ui_snapshot", { session: SESSION }
       );
-      const hasTree =
-        Array.isArray(data.windows) ||
-        Array.isArray(data.roots) ||
-        Array.isArray(data.nodes) ||
-        (typeof data.root === "object" && data.root !== null);
-      if (!hasTree) throw new Error(`unexpected ui_snapshot shape: ${JSON.stringify(data).slice(0, 240)}`);
+      if (typeof data.app !== "object" || data.app === null) throw new Error("missing app");
+      if (typeof data.snapshot !== "object" || data.snapshot === null) throw new Error("missing snapshot");
+      if (!Array.isArray(data.nodes) || data.nodes.length === 0) throw new Error("missing nodes");
+      if (!Array.isArray(data.groups)) throw new Error("missing groups");
+      if (typeof data.summary !== "object" || data.summary === null) throw new Error("missing summary");
     });
 
-    await test("filter=UILabel narrows result", async () => {
-      const data = await client.callToolJSON("ui_snapshot", { session: SESSION, filter: "UILabel" });
-      if (typeof data !== "object" || data === null) throw new Error("unexpected response");
+    await test("snapshot nodes expose searchableText/actionTargetOid", async () => {
+      const data = await client.callToolJSON<{ nodes?: Array<{ searchableText?: unknown[]; actionTargetOid?: unknown }> }>(
+        "ui_snapshot", { session: SESSION, filter: "UILabel" }
+      );
+      if (!Array.isArray(data.nodes) || data.nodes.length === 0) throw new Error("expected filtered nodes");
+      if (!data.nodes.some((node) => Array.isArray(node.searchableText) && node.searchableText.length > 0)) {
+        throw new Error("expected searchableText on at least one node");
+      }
+      if (!data.nodes.some((node) => node.actionTargetOid !== undefined)) {
+        throw new Error("expected actionTargetOid on nodes");
+      }
     });
 
     // ─── ui_query ───────────────────────────────────────────────────────────
@@ -300,20 +313,16 @@ async function runE2E() {
     await resetToHome(client);
 
     await test("set alpha=0.8 on UILabel returns ok:true", async () => {
-      const nodes = await client.callToolJSON<Array<{ oid?: number | string }>>(
-        "ui_query", { locator: "UILabel", session: SESSION }
-      );
-      testOid = String(nodes[0]?.oid);
-      if (!testOid) throw new Error("no OID");
-      const data = await client.callToolJSON<{ ok?: boolean; attr?: string }>(
-        "ui_set_attr", { oid: testOid, attr: "alpha", value: "0.8", session: SESSION }
+      const data = await client.callToolJSON<{ ok?: boolean; attr?: string; locator?: string }>(
+        "ui_set_attr", { locator: "#push_buttons_screen", attr: "alpha", value: "0.8", session: SESSION }
       );
       if (!data.ok) throw new Error(`expected ok:true, got ${JSON.stringify(data)}`);
       if (data.attr !== "alpha") throw new Error(`unexpected attr: ${data.attr}`);
+      if (data.locator !== "#push_buttons_screen") throw new Error(`unexpected locator: ${data.locator}`);
     });
 
     // Restore alpha (best-effort)
-    await client.callTool("ui_set_attr", { oid: testOid!, attr: "alpha", value: "1.0", session: SESSION });
+    await client.callTool("ui_set_attr", { locator: "#push_buttons_screen", attr: "alpha", value: "1.0", session: SESSION });
 
     // ─── compare_with_design ────────────────────────────────────────────────
     console.log("\n[ compare_with_design ]");
@@ -430,9 +439,9 @@ async function runE2E() {
     console.log("\n[ ui_assert ]");
     await resetToHome(client);
 
-    await test("assert visible #push_buttons_screen passes", async () => {
+    await test("assert visible #home_buttons_stack passes", async () => {
       const data = await client.callToolJSON<{ passed?: boolean; matchCount?: number }>(
-        "ui_assert", { mode: "visible", locator: "#push_buttons_screen", session: SESSION }
+        "ui_assert", { mode: "visible", locator: "#home_buttons_stack", session: SESSION }
       );
       if (!data.passed) throw new Error("expected passed:true");
       if (data.matchCount !== 1) throw new Error(`expected matchCount 1, got ${data.matchCount}`);
