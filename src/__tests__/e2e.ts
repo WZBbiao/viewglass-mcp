@@ -6,13 +6,17 @@
  */
 
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SERVER_ENTRY = join(__dirname, "../../dist/index.js");
-const VIEWGLASS_BIN = process.env.VIEWGLASS_BIN;
+const LOCAL_DEV_VIEWGLASS_BIN = join(__dirname, "../../../lookin/.build/debug/viewglass");
+const VIEWGLASS_BIN =
+  process.env.VIEWGLASS_BIN ??
+  (existsSync(LOCAL_DEV_VIEWGLASS_BIN) ? LOCAL_DEV_VIEWGLASS_BIN : undefined);
 
 // ─── MCP Client helpers ───────────────────────────────────────────────────────
 
@@ -122,6 +126,15 @@ async function test(label: string, fn: () => Promise<void>) {
   }
 }
 
+async function resetToHome(client: MCPClient): Promise<void> {
+  await client.callTool("ui_tap", { locator: "#dismiss_modal", session: SESSION });
+  await new Promise((r) => setTimeout(r, 300));
+  await client.callTool("ui_tap", { locator: "_UIButtonBarButton", session: SESSION });
+  await new Promise((r) => setTimeout(r, 300));
+  await client.callTool("ui_tap", { locator: "#switch_tab_home", session: SESSION });
+  await new Promise((r) => setTimeout(r, 400));
+}
+
 // ─── E2E Tests ────────────────────────────────────────────────────────────────
 
 const SESSION = "com.wzb.ViewglassDemo@47164";
@@ -133,15 +146,7 @@ async function runE2E() {
 
   try {
     // ─── Initial state reset ────────────────────────────────────────────────
-    // Dismiss any open sheet/modal first (best-effort, silently fails if none open)
-    await client.callTool("ui_tap", { locator: "#dismiss_modal", session: SESSION });
-    await new Promise((r) => setTimeout(r, 300));
-    // Pop any pushed navigation stack (best-effort, silently fails if not in nav stack)
-    await client.callTool("ui_tap", { locator: "_UIButtonBarButton", session: SESSION });
-    await new Promise((r) => setTimeout(r, 300));
-    // switch_tab_home exists on Feed/Forms but not Home. Silently no-ops when already home.
-    await client.callTool("ui_tap", { locator: "#switch_tab_home", session: SESSION });
-    await new Promise((r) => setTimeout(r, 400));
+    await resetToHome(client);
 
     // ─── ui_snapshot ────────────────────────────────────────────────────────
     console.log("\n[ ui_snapshot ]");
@@ -169,6 +174,13 @@ async function runE2E() {
     await test("query UILabel returns array of nodes", async () => {
       const nodes = await client.callToolJSON<unknown[]>("ui_query", { locator: "UILabel", session: SESSION });
       if (!Array.isArray(nodes) || nodes.length === 0) throw new Error("expected non-empty array");
+    });
+
+    await test("query UITabBar supports fuzzy class matching", async () => {
+      const full = await client.callToolJSON<unknown[]>("ui_query", { locator: "UITabBar", session: SESSION });
+      const fuzzy = await client.callToolJSON<unknown[]>("ui_query", { locator: "TabBar", session: SESSION });
+      if (!Array.isArray(full) || full.length === 0) throw new Error("expected UITabBar query to match");
+      if (!Array.isArray(fuzzy) || fuzzy.length === 0) throw new Error("expected TabBar fuzzy query to match");
     });
 
     await test("query missing locator returns isError=true", async () => {
@@ -208,6 +220,7 @@ async function runE2E() {
 
     // ─── ui_tap ─────────────────────────────────────────────────────────────
     console.log("\n[ ui_tap ]");
+    await resetToHome(client);
 
     await test("tap #push_buttons_screen returns tapped + hierarchy", async () => {
       const data = await client.callToolJSON<{ tapped?: string; hierarchy?: unknown }>(
@@ -260,22 +273,28 @@ async function runE2E() {
 
     // ─── ui_scroll ──────────────────────────────────────────────────────────
     console.log("\n[ ui_scroll ]");
-    // Wait for back-navigation animation to complete before scrolling
-    await new Promise((r) => setTimeout(r, 600));
+    await resetToHome(client);
+    await client.callToolJSON("ui_tap", { locator: "#switch_tab_feed", session: SESSION });
+    await new Promise((r) => setTimeout(r, 500));
 
     await test("scroll UIScrollView down returns scrolled+direction+hierarchy", async () => {
       const data = await client.callToolJSON<{ scrolled?: string; direction?: string; hierarchy?: unknown }>(
-        "ui_scroll", { locator: "UIScrollView", direction: "down", distance: 200, session: SESSION }
+        "ui_scroll", { locator: "#long_feed_scroll", direction: "down", distance: 200, session: SESSION }
       );
-      if (data.scrolled !== "UIScrollView") throw new Error(`unexpected scrolled: ${data.scrolled}`);
+      if (data.scrolled !== "#long_feed_scroll") throw new Error(`unexpected scrolled: ${data.scrolled}`);
       if (data.direction !== "down") throw new Error(`unexpected direction: ${data.direction}`);
       if (!data.hierarchy) throw new Error("missing hierarchy");
     });
 
     // ─── ui_set_attr ────────────────────────────────────────────────────────
     console.log("\n[ ui_set_attr ]");
+    await resetToHome(client);
 
     await test("set alpha=0.8 on UILabel returns ok:true", async () => {
+      const nodes = await client.callToolJSON<Array<{ oid?: number | string }>>(
+        "ui_query", { locator: "UILabel", session: SESSION }
+      );
+      testOid = String(nodes[0]?.oid);
       if (!testOid) throw new Error("no OID");
       const data = await client.callToolJSON<{ ok?: boolean; attr?: string }>(
         "ui_set_attr", { oid: testOid, attr: "alpha", value: "0.8", session: SESSION }
@@ -366,6 +385,7 @@ async function runE2E() {
 
     // ─── ui_wait ────────────────────────────────────────────────────────────
     console.log("\n[ ui_wait ]");
+    await resetToHome(client);
 
     await test("wait appears UILabel returns met:true immediately", async () => {
       const data = await client.callToolJSON<{ met?: boolean; pollCount?: number }>(
@@ -399,6 +419,7 @@ async function runE2E() {
 
     // ─── ui_assert ──────────────────────────────────────────────────────────
     console.log("\n[ ui_assert ]");
+    await resetToHome(client);
 
     await test("assert visible #push_buttons_screen passes", async () => {
       const data = await client.callToolJSON<{ passed?: boolean; matchCount?: number }>(
@@ -431,6 +452,7 @@ async function runE2E() {
 
     // ─── ui_screenshot ──────────────────────────────────────────────────────
     console.log("\n[ ui_screenshot ]");
+    await resetToHome(client);
 
     await test("full-screen screenshot returns path ending in .png", async () => {
       const data = await client.callToolJSON<{ path?: string }>("ui_screenshot", { session: SESSION });
@@ -448,6 +470,7 @@ async function runE2E() {
 
     // ─── ui_input (navigate to forms first) ────────────────────────────────
     console.log("\n[ ui_input ]");
+    await resetToHome(client);
 
     await test("navigate to forms screen", async () => {
       await client.callToolJSON("ui_tap", { locator: "#push_forms_screen", session: SESSION });
@@ -474,10 +497,13 @@ async function runE2E() {
 
     // ─── ui_swipe ───────────────────────────────────────────────────────────
     console.log("\n[ ui_swipe ]");
+    await resetToHome(client);
+    await client.callToolJSON("ui_tap", { locator: "#switch_tab_feed", session: SESSION });
+    await new Promise((r) => setTimeout(r, 500));
 
     await test("swipe UIScrollView down returns ok:true with target/direction/distance", async () => {
       const data = await client.callToolJSON<{ ok?: boolean; target?: string; direction?: string; distance?: number }>(
-        "ui_swipe", { target: "UIScrollView", direction: "down", distance: 150, session: SESSION }
+        "ui_swipe", { target: "#long_feed_scroll", direction: "down", distance: 150, session: SESSION }
       );
       if (!data.ok) throw new Error("expected ok:true");
       if (data.direction !== "down") throw new Error(`unexpected direction: ${data.direction}`);
@@ -486,13 +512,14 @@ async function runE2E() {
 
     await test("swipe UIScrollView up returns ok:true", async () => {
       const data = await client.callToolJSON<{ ok?: boolean }>(
-        "ui_swipe", { target: "UIScrollView", direction: "up", session: SESSION }
+        "ui_swipe", { target: "#long_feed_scroll", direction: "up", session: SESSION }
       );
       if (!data.ok) throw new Error("expected ok:true");
     });
 
     // ─── ui_dismiss (show a modal sheet, then dismiss it) ───────────────────
     console.log("\n[ ui_dismiss ]");
+    await resetToHome(client);
 
     await test("tap #show_home_sheet to present a modal sheet", async () => {
       await client.callToolJSON("ui_tap", { locator: "#show_home_sheet", session: SESSION });

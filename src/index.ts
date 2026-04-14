@@ -92,14 +92,15 @@ server.registerTool(
       "Use the returned oid values with ui_attr_get, ui_set_attr, or for invoke calls. " +
       "To search by visible text (Chinese supported): contains:\"substring\" — " +
       "searches UILabel text, button title, accessibilityLabel, and accessibilityIdentifier all at once. " +
+      "Class and controller locators are fuzzy by default, so UITabBar and TabBar both match UITabBar. " +
       "Other locators: #accessibilityIdentifier, @\"exact label\", UIClassName, *ClassSuffix, " +
-      "oid:N, .visible/.hidden/.interactive, ancestor:Class, parent:Class, tag:N, AND/OR/NOT. " +
+      "controller:Class, oid:N, .visible/.hidden/.interactive, ancestor:Class, parent:Class, tag:N, AND/OR/NOT. " +
       "Do NOT use screenshot to find elements — use this tool instead.",
     inputSchema: {
       locator: z
         .string()
         .describe(
-          "Locator: contains:\"substr\" (full-text search across all text fields) | #accessibilityId | @\"exact label\" | UIClassName | oid:N | .visible | .hidden | ancestor:Class | AND/OR/NOT"
+          "Locator: contains:\"substr\" (full-text search across all text fields) | #accessibilityId | @\"exact label\" | UIClassName / controller:Class (fuzzy by default) | oid:N | .visible | .hidden | ancestor:Class | AND/OR/NOT"
         ),
       session: sessionSchema,
     },
