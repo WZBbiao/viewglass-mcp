@@ -133,6 +133,13 @@ async function resetToHome(client: MCPClient): Promise<void> {
   await new Promise((r) => setTimeout(r, 300));
   await client.callTool("ui_tap", { locator: "#switch_tab_home", session: SESSION });
   await new Promise((r) => setTimeout(r, 400));
+  await client.callToolJSON("ui_wait", {
+    mode: "appears",
+    locator: "#push_buttons_screen",
+    timeout: 12,
+    intervalMs: 500,
+    session: SESSION,
+  });
 }
 
 // ─── E2E Tests ────────────────────────────────────────────────────────────────
@@ -179,8 +186,10 @@ async function runE2E() {
     await test("query UITabBar supports fuzzy class matching", async () => {
       const full = await client.callToolJSON<unknown[]>("ui_query", { locator: "UITabBar", session: SESSION });
       const fuzzy = await client.callToolJSON<unknown[]>("ui_query", { locator: "TabBar", session: SESSION });
+      const lowercase = await client.callToolJSON<unknown[]>("ui_query", { locator: "tabbar", session: SESSION });
       if (!Array.isArray(full) || full.length === 0) throw new Error("expected UITabBar query to match");
       if (!Array.isArray(fuzzy) || fuzzy.length === 0) throw new Error("expected TabBar fuzzy query to match");
+      if (!Array.isArray(lowercase) || lowercase.length === 0) throw new Error("expected tabbar lowercase query to match");
     });
 
     await test("query missing locator returns isError=true", async () => {

@@ -3,7 +3,8 @@ import type { ExecFn } from "../runner.js";
 
 export interface UIQueryInput {
   /**
-   * Locator string. Class and controller locators use case-insensitive fuzzy matching by default.
+   * Locator string. Bare class/controller words use case-insensitive fuzzy matching by default,
+   * including lowercase inputs like `tableview`, `tabbar`, or `alert`.
    * To search by visible text, use:
    *  - `contains:"partial string"` — full-text search across UILabel.text, button title,
    *    accessibilityLabel, and accessibilityIdentifier (case-insensitive, supports Chinese)
@@ -11,7 +12,7 @@ export interface UIQueryInput {
    * Other supported formats:
    *  - `#accessibilityIdentifier` — exact accessibility identifier match
    *  - `@"exact label"` or `@label` — exact accessibilityLabel match
-   *  - UIKit class / controller name (e.g. `UIButton`, `Label`, `UITabBar`, `TabBar`, `controller:Alert`)
+   *  - UIKit class / controller name (e.g. `UIButton`, `Label`, `tableview`, `UITabBar`, `tabbar`, `controller:Alert`)
    *  - `oid:123` or bare number — match by object ID
    *  - `.visible` / `.hidden` / `.interactive` — visibility filter
    *  - `ancestor:UIScrollView` — nodes inside a specific ancestor class
@@ -28,7 +29,8 @@ export interface UIQueryInput {
 /**
  * Query UI nodes matching a locator. Returns an array of matching nodes,
  * each with oid, className, frame, accessibilityIdentifier, and more.
- * Class and controller locators use case-insensitive fuzzy matching by default.
+ * Bare class and controller locators use case-insensitive fuzzy matching by default,
+ * including lowercase inputs like `tableview`, `tabbar`, and `alert`.
  * Use the returned oid values with ui_attr_get, ui_set_attr, or invoke.
  */
 export async function uiQuery(
