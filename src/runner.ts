@@ -18,14 +18,29 @@ function findBundledBinary(): string | undefined {
   return existsSync(p) ? p : undefined;
 }
 
+function findPathBinary(): string | undefined {
+  const pathValue = process.env.PATH;
+  if (!pathValue) return undefined;
+
+  for (const dir of pathValue.split(":")) {
+    if (!dir) continue;
+    const candidate = join(dir, "viewglass");
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+}
+
 /**
  * Resolution order:
  *  1. VIEWGLASS_BIN env var (explicit override)
- *  2. Bundled binary shipped with this npm package
- *  3. "viewglass" in $PATH (development / Homebrew install)
+ *  2. "viewglass" in $PATH (development / Homebrew install)
+ *  3. Bundled binary shipped with this npm package
  */
 export const VIEWGLASS_BIN =
-  process.env.VIEWGLASS_BIN ?? findBundledBinary() ?? "viewglass";
+  process.env.VIEWGLASS_BIN ?? findPathBinary() ?? findBundledBinary() ?? "viewglass";
 
 export interface RunResult {
   stdout: string;

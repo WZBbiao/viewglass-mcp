@@ -125,4 +125,4 @@ bin/                 # bundled viewglass CLI binaries (not in git, in npm)
 .viewglass-cli-version   # pins the CLI version bundled in this release
 ```
 
-Binary resolution order: `VIEWGLASS_BIN` env → `bin/` bundled binary → `viewglass` in $PATH.
+Binary resolution order: `VIEWGLASS_BIN` env → `viewglass` in $PATH → `bin/` bundled binary.
