@@ -33,6 +33,7 @@ import { uiInput } from "./tools/ui_input.js";
 import { uiSwipe } from "./tools/ui_swipe.js";
 import { uiLongPress } from "./tools/ui_long_press.js";
 import { uiDismiss } from "./tools/ui_dismiss.js";
+import { logToolFinish, logToolStart, logToolThrow, safeStringify } from "./log.js";
 
 const server = new McpServer({
   name: "viewglass-mcp",
@@ -43,6 +44,36 @@ const sessionSchema = z
   .string()
   .optional()
   .describe("Session in bundleId@port format. Auto-detected if omitted.");
+
+type ToolResponse = {
+  content: Array<{ type: "text"; text: string }>;
+  isError?: boolean;
+};
+
+function summarizeToolResponse(response: ToolResponse) {
+  return {
+    isError: response.isError === true,
+    contentTypes: response.content.map((item) => item.type),
+    firstText: response.content[0]?.text ? safeStringify(response.content[0].text, 400) : undefined,
+  };
+}
+
+async function withToolLogging<TArgs extends object>(
+  name: string,
+  args: TArgs,
+  run: () => Promise<ToolResponse>
+): Promise<ToolResponse> {
+  const startedAt = Date.now();
+  logToolStart(name, args);
+  try {
+    const result = await run();
+    logToolFinish(name, summarizeToolResponse(result), Date.now() - startedAt);
+    return result;
+  } catch (error: unknown) {
+    logToolThrow(name, error, Date.now() - startedAt);
+    throw error;
+  }
+}
 
 // ─── ui_snapshot ────────────────────────────────────────────────────────────
 
@@ -70,14 +101,15 @@ server.registerTool(
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ session, filter, compact }) => {
-    try {
-      const result = await uiSnapshot({ session, filter, compact });
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: "text", text: String(e) }] };
-    }
-  }
+  async ({ session, filter, compact }) =>
+    withToolLogging("ui_snapshot", { session, filter, compact }, async () => {
+      try {
+        const result = await uiSnapshot({ session, filter, compact });
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { isError: true, content: [{ type: "text", text: String(e) }] };
+      }
+    })
 );
 
 // ─── ui_query ───────────────────────────────────────────────────────────────
@@ -100,28 +132,29 @@ server.registerTool(
     },
     annotations: { readOnlyHint: true, idempotentHint: true },
   },
-  async ({ locator, session }) => {
-    try {
-      const result = await uiQuery({ locator, session });
-      if (result.length === 0) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text",
-              text:
-                `ui_query: locator '${locator}' matched 0 nodes. ` +
-                "Try a different visible text, accessibility identifier, class name, or oid. " +
-                "Call ui_snapshot to inspect the current hierarchy.",
-            },
-          ],
-        };
+  async ({ locator, session }) =>
+    withToolLogging("ui_query", { locator, session }, async () => {
+      try {
+        const result = await uiQuery({ locator, session });
+        if (result.length === 0) {
+          return {
+            isError: true,
+            content: [
+              {
+                type: "text",
+                text:
+                  `ui_query: locator '${locator}' matched 0 nodes. ` +
+                  "Try a different visible text, accessibility identifier, class name, or oid. " +
+                  "Call ui_snapshot to inspect the current hierarchy.",
+              },
+            ],
+          };
+        }
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { isError: true, content: [{ type: "text", text: String(e) }] };
       }
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: "text", text: String(e) }] };
-    }
-  }
+    })
 );
 
 // ─── ui_attr_get ─────────────────────────────────────────────────────────────
@@ -145,14 +178,15 @@ server.registerTool(
     },
     annotations: { readOnlyHint: true, idempotentHint: true },
   },
-  async ({ oid, attrs, session }) => {
-    try {
-      const result = await uiAttrGet({ oid, attrs, session });
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: "text", text: String(e) }] };
-    }
-  }
+  async ({ oid, attrs, session }) =>
+    withToolLogging("ui_attr_get", { oid, attrs, session }, async () => {
+      try {
+        const result = await uiAttrGet({ oid, attrs, session });
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { isError: true, content: [{ type: "text", text: String(e) }] };
+      }
+    })
 );
 
 // ─── ui_tap ──────────────────────────────────────────────────────────────────
@@ -173,14 +207,15 @@ server.registerTool(
       session: sessionSchema,
     },
   },
-  async ({ locator, session }) => {
-    try {
-      const result = await uiTap({ locator, session });
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: "text", text: String(e) }] };
-    }
-  }
+  async ({ locator, session }) =>
+    withToolLogging("ui_tap", { locator, session }, async () => {
+      try {
+        const result = await uiTap({ locator, session });
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { isError: true, content: [{ type: "text", text: String(e) }] };
+      }
+    })
 );
 
 // ─── ui_scroll ───────────────────────────────────────────────────────────────
@@ -204,14 +239,15 @@ server.registerTool(
       session: sessionSchema,
     },
   },
-  async ({ locator, direction, distance, animated, session }) => {
-    try {
-      const result = await uiScroll({ locator, direction, distance, animated, session });
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: "text", text: String(e) }] };
-    }
-  }
+  async ({ locator, direction, distance, animated, session }) =>
+    withToolLogging("ui_scroll", { locator, direction, distance, animated, session }, async () => {
+      try {
+        const result = await uiScroll({ locator, direction, distance, animated, session });
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { isError: true, content: [{ type: "text", text: String(e) }] };
+      }
+    })
 );
 
 // ─── ui_set_attr ─────────────────────────────────────────────────────────────
@@ -245,17 +281,18 @@ server.registerTool(
     },
     annotations: { destructiveHint: true, idempotentHint: true },
   },
-  async ({ oid, locator, attr, value, session }) => {
-    try {
-      if (!oid && !locator) {
-        return { isError: true, content: [{ type: "text", text: "ui_set_attr requires either 'oid' or 'locator'" }] };
+  async ({ oid, locator, attr, value, session }) =>
+    withToolLogging("ui_set_attr", { oid, locator, attr, value, session }, async () => {
+      try {
+        if (!oid && !locator) {
+          return { isError: true, content: [{ type: "text", text: "ui_set_attr requires either 'oid' or 'locator'" }] };
+        }
+        const result = await uiSetAttr({ oid, locator, attr, value, session });
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { isError: true, content: [{ type: "text", text: String(e) }] };
       }
-      const result = await uiSetAttr({ oid, locator, attr, value, session });
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: "text", text: String(e) }] };
-    }
-  }
+    })
 );
 
 // ─── compare_with_design ─────────────────────────────────────────────────────
@@ -287,14 +324,15 @@ server.registerTool(
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ figmaNodeUrl, locator, session }) => {
-    try {
-      const result = await compareWithDesign({ figmaNodeUrl, locator, session });
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: "text", text: String(e) }] };
-    }
-  }
+  async ({ figmaNodeUrl, locator, session }) =>
+    withToolLogging("compare_with_design", { figmaNodeUrl, locator, session }, async () => {
+      try {
+        const result = await compareWithDesign({ figmaNodeUrl, locator, session });
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { isError: true, content: [{ type: "text", text: String(e) }] };
+      }
+    })
 );
 
 // ─── ui_invoke ────────────────────────────────────────────────────────────────
@@ -331,14 +369,15 @@ server.registerTool(
     },
     annotations: { destructiveHint: false },
   },
-  async ({ selector, target, args, session }) => {
-    try {
-      const result = await uiInvoke({ selector, target, args, session });
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: "text", text: String(e) }] };
-    }
-  }
+  async ({ selector, target, args, session }) =>
+    withToolLogging("ui_invoke", { selector, target, args, session }, async () => {
+      try {
+        const result = await uiInvoke({ selector, target, args, session });
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { isError: true, content: [{ type: "text", text: String(e) }] };
+      }
+    })
 );
 
 // ─── ui_wait ──────────────────────────────────────────────────────────────────
@@ -381,39 +420,40 @@ server.registerTool(
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ mode, locator, key, equals, contains, timeout, intervalMs, session }) => {
-    try {
-      let input: Parameters<typeof uiWait>[0];
-      if (mode === "attr") {
-        if (!key) {
-          return { isError: true, content: [{ type: "text", text: "ui_wait attr mode requires 'key'" }] };
+  async ({ mode, locator, key, equals, contains, timeout, intervalMs, session }) =>
+    withToolLogging("ui_wait", { mode, locator, key, equals, contains, timeout, intervalMs, session }, async () => {
+      try {
+        let input: Parameters<typeof uiWait>[0];
+        if (mode === "attr") {
+          if (!key) {
+            return { isError: true, content: [{ type: "text", text: "ui_wait attr mode requires 'key'" }] };
+          }
+          input = { mode: "attr", locator, key, equals, contains, timeout, intervalMs, session };
+        } else {
+          input = { mode, locator, timeout, intervalMs, session };
         }
-        input = { mode: "attr", locator, key, equals, contains, timeout, intervalMs, session };
-      } else {
-        input = { mode, locator, timeout, intervalMs, session };
+        const result = await uiWait(input);
+        if (!result.met) {
+          return {
+            isError: true,
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  ...result,
+                  hint: `Condition '${result.condition}' not met after ${
+                    typeof result.elapsedSeconds === "number" ? result.elapsedSeconds.toFixed(1) : "unknown"
+                  }s (${typeof result.pollCount === "number" ? result.pollCount : "unknown"} polls). Check locator or increase timeout.`,
+                }, null, 2),
+              },
+            ],
+          };
+        }
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { isError: true, content: [{ type: "text", text: String(e) }] };
       }
-      const result = await uiWait(input);
-      if (!result.met) {
-        return {
-          isError: true,
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({
-                ...result,
-                hint: `Condition '${result.condition}' not met after ${
-                  typeof result.elapsedSeconds === "number" ? result.elapsedSeconds.toFixed(1) : "unknown"
-                }s (${typeof result.pollCount === "number" ? result.pollCount : "unknown"} polls). Check locator or increase timeout.`,
-              }, null, 2),
-            },
-          ],
-        };
-      }
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: "text", text: String(e) }] };
-    }
-  }
+    })
 );
 
 // ─── ui_assert ────────────────────────────────────────────────────────────────
@@ -457,33 +497,34 @@ server.registerTool(
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ mode, locator, expected, contains, count, min, max, key, attrEquals, attrContains, session }) => {
-    try {
-      let input: Parameters<typeof uiAssert>[0];
-      if (mode === "visible") {
-        input = { mode: "visible", locator, session };
-      } else if (mode === "text") {
-        if (!expected) {
-          return { isError: true, content: [{ type: "text", text: "ui_assert text mode requires 'expected'" }] };
+  async ({ mode, locator, expected, contains, count, min, max, key, attrEquals, attrContains, session }) =>
+    withToolLogging("ui_assert", { mode, locator, expected, contains, count, min, max, key, attrEquals, attrContains, session }, async () => {
+      try {
+        let input: Parameters<typeof uiAssert>[0];
+        if (mode === "visible") {
+          input = { mode: "visible", locator, session };
+        } else if (mode === "text") {
+          if (!expected) {
+            return { isError: true, content: [{ type: "text", text: "ui_assert text mode requires 'expected'" }] };
+          }
+          input = { mode: "text", locator, expected, contains: contains ?? false, session };
+        } else if (mode === "count") {
+          input = { mode: "count", locator, expected: count, min, max, session };
+        } else {
+          if (!key) {
+            return { isError: true, content: [{ type: "text", text: "ui_assert attr mode requires 'key'" }] };
+          }
+          input = { mode: "attr", locator, key, equals: attrEquals, contains: attrContains, session };
         }
-        input = { mode: "text", locator, expected, contains: contains ?? false, session };
-      } else if (mode === "count") {
-        input = { mode: "count", locator, expected: count, min, max, session };
-      } else {
-        if (!key) {
-          return { isError: true, content: [{ type: "text", text: "ui_assert attr mode requires 'key'" }] };
+        const result = await uiAssert(input);
+        if (!result.passed) {
+          return { isError: true, content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
         }
-        input = { mode: "attr", locator, key, equals: attrEquals, contains: attrContains, session };
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { isError: true, content: [{ type: "text", text: String(e) }] };
       }
-      const result = await uiAssert(input);
-      if (!result.passed) {
-        return { isError: true, content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-      }
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: "text", text: String(e) }] };
-    }
-  }
+    })
 );
 
 // ─── ui_scan ─────────────────────────────────────────────────────────────────
@@ -505,14 +546,15 @@ server.registerTool(
     inputSchema: {},
     annotations: { readOnlyHint: true },
   },
-  async () => {
-    try {
-      const result = await uiScan();
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: "text", text: String(e) }] };
-    }
-  }
+  async () =>
+    withToolLogging("ui_scan", {}, async () => {
+      try {
+        const result = await uiScan();
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { isError: true, content: [{ type: "text", text: String(e) }] };
+      }
+    })
 );
 
 // ─── ui_connect ───────────────────────────────────────────────────────────────
@@ -537,14 +579,15 @@ server.registerTool(
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ bundleId }) => {
-    try {
-      const result = await uiConnect({ bundleId });
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: "text", text: String(e) }] };
-    }
-  }
+  async ({ bundleId }) =>
+    withToolLogging("ui_connect", { bundleId }, async () => {
+      try {
+        const result = await uiConnect({ bundleId });
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { isError: true, content: [{ type: "text", text: String(e) }] };
+      }
+    })
 );
 
 // ─── ui_screenshot ────────────────────────────────────────────────────────────
@@ -576,14 +619,15 @@ server.registerTool(
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ locator, outputPath, session }) => {
-    try {
-      const result = await uiScreenshot({ locator, outputPath, session });
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: "text", text: String(e) }] };
-    }
-  }
+  async ({ locator, outputPath, session }) =>
+    withToolLogging("ui_screenshot", { locator, outputPath, session }, async () => {
+      try {
+        const result = await uiScreenshot({ locator, outputPath, session });
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { isError: true, content: [{ type: "text", text: String(e) }] };
+      }
+    })
 );
 
 // ─── ui_input ─────────────────────────────────────────────────────────────────
@@ -607,14 +651,15 @@ server.registerTool(
         .describe("Session in bundleId@port format. Auto-detected if omitted."),
     },
   },
-  async ({ target, text, session }) => {
-    try {
-      const result = await uiInput({ target, text, session });
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: "text", text: String(e) }] };
-    }
-  }
+  async ({ target, text, session }) =>
+    withToolLogging("ui_input", { target, text, session }, async () => {
+      try {
+        const result = await uiInput({ target, text, session });
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { isError: true, content: [{ type: "text", text: String(e) }] };
+      }
+    })
 );
 
 // ─── ui_swipe ─────────────────────────────────────────────────────────────────
@@ -638,14 +683,15 @@ server.registerTool(
         .describe("Session in bundleId@port format. Auto-detected if omitted."),
     },
   },
-  async ({ target, direction, distance, animated, session }) => {
-    try {
-      const result = await uiSwipe({ target, direction, distance, animated, session });
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: "text", text: String(e) }] };
-    }
-  }
+  async ({ target, direction, distance, animated, session }) =>
+    withToolLogging("ui_swipe", { target, direction, distance, animated, session }, async () => {
+      try {
+        const result = await uiSwipe({ target, direction, distance, animated, session });
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { isError: true, content: [{ type: "text", text: String(e) }] };
+      }
+    })
 );
 
 // ─── ui_long_press ────────────────────────────────────────────────────────────
@@ -667,14 +713,15 @@ server.registerTool(
         .describe("Session in bundleId@port format. Auto-detected if omitted."),
     },
   },
-  async ({ target, session }) => {
-    try {
-      const result = await uiLongPress({ target, session });
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: "text", text: String(e) }] };
-    }
-  }
+  async ({ target, session }) =>
+    withToolLogging("ui_long_press", { target, session }, async () => {
+      try {
+        const result = await uiLongPress({ target, session });
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { isError: true, content: [{ type: "text", text: String(e) }] };
+      }
+    })
 );
 
 // ─── ui_dismiss ───────────────────────────────────────────────────────────────
@@ -700,14 +747,15 @@ server.registerTool(
         .describe("Session in bundleId@port format. Auto-detected if omitted."),
     },
   },
-  async ({ target, session }) => {
-    try {
-      const result = await uiDismiss({ target, session });
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: "text", text: String(e) }] };
-    }
-  }
+  async ({ target, session }) =>
+    withToolLogging("ui_dismiss", { target, session }, async () => {
+      try {
+        const result = await uiDismiss({ target, session });
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (e) {
+        return { isError: true, content: [{ type: "text", text: String(e) }] };
+      }
+    })
 );
 
 // ─── Start ───────────────────────────────────────────────────────────────────

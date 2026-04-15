@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+import { logCliFinish, logCliStart } from "./log.js";
 
 const _execFile = promisify(execFile);
 
@@ -68,9 +69,33 @@ export async function runCLI(
 ): Promise<RunResult> {
   const exec = opts.exec ?? defaultExec;
   const sessionArgs = opts.session ? ["--session", opts.session] : [];
-  return exec(VIEWGLASS_BIN, [...args, ...sessionArgs], {
-    timeout: opts.timeoutMs ?? 15_000,
-  });
+  const fullArgs = [...args, ...sessionArgs];
+  const timeout = opts.timeoutMs ?? 15_000;
+  const startedAt = Date.now();
+  logCliStart(VIEWGLASS_BIN, fullArgs, timeout);
+  try {
+    const result = await exec(VIEWGLASS_BIN, fullArgs, { timeout });
+    logCliFinish({
+      file: VIEWGLASS_BIN,
+      args: fullArgs,
+      durationMs: Date.now() - startedAt,
+      exitStatus: 0,
+      stdout: result.stdout,
+      stderr: result.stderr,
+    });
+    return result;
+  } catch (error: unknown) {
+    const anyError = error as { code?: number | string; stdout?: string; stderr?: string };
+    logCliFinish({
+      file: VIEWGLASS_BIN,
+      args: fullArgs,
+      durationMs: Date.now() - startedAt,
+      exitStatus: anyError.code ?? "error",
+      stdout: anyError.stdout,
+      stderr: anyError.stderr ?? String(error),
+    });
+    throw error;
+  }
 }
 
 /**

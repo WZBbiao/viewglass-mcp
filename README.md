@@ -84,6 +84,20 @@ Set `VIEWGLASS_BIN` to use a specific binary (development / CI):
 VIEWGLASS_BIN=/path/to/viewglass npx viewglass-mcp
 ```
 
+### Debug logging
+
+All logs go to `stderr` by default so they do not corrupt the MCP `stdout` protocol stream.
+
+```bash
+VIEWGLASS_MCP_LOG=1 npx viewglass-mcp
+```
+
+Optional flags:
+
+- `VIEWGLASS_MCP_LOG_TOOL=1`: log each tool call start/end summary
+- `VIEWGLASS_MCP_LOG_CLI=1`: log each internal `viewglass` CLI command, duration, and exit status
+- `VIEWGLASS_MCP_LOG_FILE=/tmp/viewglass-mcp.log`: write logs to a file instead of `stderr`
+
 ## Development
 
 ```bash
