@@ -97,6 +97,13 @@ Optional flags:
 - `VIEWGLASS_MCP_LOG_TOOL=1`: log each tool call start/end summary
 - `VIEWGLASS_MCP_LOG_CLI=1`: log each internal `viewglass` CLI command, duration, and exit status
 - `VIEWGLASS_MCP_LOG_FILE=/tmp/viewglass-mcp.log`: write logs to a file instead of `stderr`
+- `VIEWGLASS_MCP_LOG_SPLIT_BY_SESSION=1`: when `VIEWGLASS_MCP_LOG_FILE` is set, write one file per session
+
+When session logging is enabled, each line includes `session=<bundleId@port>` when the tool/CLI call has one.  
+With file splitting enabled, examples look like:
+
+- `/tmp/viewglass-mcp.log.com.example.app@47175.log`
+- `/tmp/viewglass-mcp.log.com.wzb.ViewglassDemo@47164.log`
 
 ## Development
 

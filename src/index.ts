@@ -64,13 +64,17 @@ async function withToolLogging<TArgs extends object>(
   run: () => Promise<ToolResponse>
 ): Promise<ToolResponse> {
   const startedAt = Date.now();
+  const session =
+    "session" in args && typeof (args as { session?: unknown }).session === "string"
+      ? ((args as { session?: string }).session ?? undefined)
+      : undefined;
   logToolStart(name, args);
   try {
     const result = await run();
-    logToolFinish(name, summarizeToolResponse(result), Date.now() - startedAt);
+    logToolFinish(name, summarizeToolResponse(result), Date.now() - startedAt, session);
     return result;
   } catch (error: unknown) {
-    logToolThrow(name, error, Date.now() - startedAt);
+    logToolThrow(name, error, Date.now() - startedAt, session);
     throw error;
   }
 }
