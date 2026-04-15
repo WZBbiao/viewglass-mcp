@@ -127,15 +127,15 @@ async function test(label: string, fn: () => Promise<void>) {
 }
 
 async function resetToHome(client: MCPClient): Promise<void> {
-  await client.callTool("ui_tap", { locator: "#dismiss_modal", session: SESSION });
+  await client.callTool("ui_tap", { locator: "dismiss_modal", session: SESSION });
   await new Promise((r) => setTimeout(r, 300));
   await client.callTool("ui_tap", { locator: "_UIButtonBarButton", session: SESSION });
   await new Promise((r) => setTimeout(r, 300));
-  await client.callTool("ui_tap", { locator: "#switch_tab_home", session: SESSION });
+  await client.callTool("ui_tap", { locator: "switch_tab_home", session: SESSION });
   await new Promise((r) => setTimeout(r, 400));
   await client.callToolJSON("ui_wait", {
     mode: "appears",
-    locator: "#push_buttons_screen",
+    locator: "push_buttons_screen",
     timeout: 12,
     intervalMs: 500,
     session: SESSION,
@@ -206,7 +206,7 @@ async function runE2E() {
     });
 
     await test("query missing locator returns isError=true", async () => {
-      const r = await client.callTool("ui_query", { locator: "#__definitely_missing__", session: SESSION });
+      const r = await client.callTool("ui_query", { locator: "__definitely_missing__", session: SESSION });
       if (!r.isError) throw new Error("expected isError=true for missing locator");
     });
 
@@ -244,26 +244,28 @@ async function runE2E() {
     console.log("\n[ ui_tap ]");
     await resetToHome(client);
 
-    await test("tap #push_buttons_screen returns tapped + hierarchy", async () => {
-      const data = await client.callToolJSON<{ tapped?: string; hierarchy?: unknown }>(
-        "ui_tap", { locator: "#push_buttons_screen", session: SESSION }
+    await test("tap push_buttons_screen returns lightweight postState", async () => {
+      const data = await client.callToolJSON<{ ok?: boolean; locator?: string; resolvedTarget?: string; postState?: { snapshotId?: string } }>(
+        "ui_tap", { locator: "push_buttons_screen", session: SESSION }
       );
-      if (data.tapped !== "#push_buttons_screen") throw new Error(`unexpected tapped: ${data.tapped}`);
-      if (!data.hierarchy) throw new Error("missing post-action hierarchy");
+      if (!data.ok) throw new Error(`unexpected result: ${JSON.stringify(data)}`);
+      if (data.locator !== "push_buttons_screen") throw new Error(`unexpected locator: ${data.locator}`);
+      if (!data.resolvedTarget) throw new Error("missing resolvedTarget");
+      if (!data.postState?.snapshotId) throw new Error("missing postState");
     });
 
-    await test("tap _UIButtonBarButton (back) returns hierarchy", async () => {
-      const data = await client.callToolJSON<{ hierarchy?: unknown }>(
+    await test("tap _UIButtonBarButton (back) returns lightweight postState", async () => {
+      const data = await client.callToolJSON<{ postState?: { snapshotId?: string } }>(
         "ui_tap", { locator: "_UIButtonBarButton", session: SESSION }
       );
-      if (!data.hierarchy) throw new Error("missing post-action hierarchy");
+      if (!data.postState?.snapshotId) throw new Error("missing postState");
     });
 
     await test("tap table cell label triggers UITableViewCell selection", async () => {
-      await client.callToolJSON("ui_tap", { locator: "#push_selectable_surfaces_screen", session: SESSION });
-      await client.callToolJSON("ui_tap", { locator: "#table_row_label_1", session: SESSION });
+      await client.callToolJSON("ui_tap", { locator: "push_selectable_surfaces_screen", session: SESSION });
+      await client.callToolJSON("ui_tap", { locator: "table_row_label_1", session: SESSION });
       const nodes = await client.callToolJSON<Array<{ oid?: number | string }>>(
-        "ui_query", { locator: "#selection_status", session: SESSION }
+        "ui_query", { locator: "selection_status", session: SESSION }
       );
       const oid = String(nodes[0]?.oid);
       if (!oid || oid === "undefined") throw new Error("missing selection_status oid");
@@ -277,9 +279,9 @@ async function runE2E() {
     });
 
     await test("tap collection cell label triggers UICollectionViewCell selection", async () => {
-      await client.callToolJSON("ui_tap", { locator: "#collection_tile_label_2", session: SESSION });
+      await client.callToolJSON("ui_tap", { locator: "collection_tile_label_2", session: SESSION });
       const nodes = await client.callToolJSON<Array<{ oid?: number | string }>>(
-        "ui_query", { locator: "#selection_status", session: SESSION }
+        "ui_query", { locator: "selection_status", session: SESSION }
       );
       const oid = String(nodes[0]?.oid);
       if (!oid || oid === "undefined") throw new Error("missing selection_status oid");
@@ -296,16 +298,18 @@ async function runE2E() {
     // ─── ui_scroll ──────────────────────────────────────────────────────────
     console.log("\n[ ui_scroll ]");
     await resetToHome(client);
-    await client.callToolJSON("ui_tap", { locator: "#switch_tab_feed", session: SESSION });
+    await client.callToolJSON("ui_tap", { locator: "switch_tab_feed", session: SESSION });
     await new Promise((r) => setTimeout(r, 500));
 
-    await test("scroll UIScrollView down returns scrolled+direction+hierarchy", async () => {
-      const data = await client.callToolJSON<{ scrolled?: string; direction?: string; hierarchy?: unknown }>(
-        "ui_scroll", { locator: "#long_feed_scroll", direction: "down", distance: 200, session: SESSION }
+    await test("scroll long_feed_scroll returns lightweight postState", async () => {
+      const data = await client.callToolJSON<{ ok?: boolean; locator?: string; direction?: string; distance?: number; postState?: { snapshotId?: string } }>(
+        "ui_scroll", { locator: "long_feed_scroll", direction: "down", distance: 200, session: SESSION }
       );
-      if (data.scrolled !== "#long_feed_scroll") throw new Error(`unexpected scrolled: ${data.scrolled}`);
+      if (!data.ok) throw new Error(`unexpected result: ${JSON.stringify(data)}`);
+      if (data.locator !== "long_feed_scroll") throw new Error(`unexpected locator: ${data.locator}`);
       if (data.direction !== "down") throw new Error(`unexpected direction: ${data.direction}`);
-      if (!data.hierarchy) throw new Error("missing hierarchy");
+      if (data.distance !== 200) throw new Error(`unexpected distance: ${data.distance}`);
+      if (!data.postState?.snapshotId) throw new Error("missing postState");
     });
 
     // ─── ui_set_attr ────────────────────────────────────────────────────────
@@ -314,15 +318,15 @@ async function runE2E() {
 
     await test("set alpha=0.8 on UILabel returns ok:true", async () => {
       const data = await client.callToolJSON<{ ok?: boolean; attr?: string; locator?: string }>(
-        "ui_set_attr", { locator: "#push_buttons_screen", attr: "alpha", value: "0.8", session: SESSION }
+        "ui_set_attr", { locator: "push_buttons_screen", attr: "alpha", value: "0.8", session: SESSION }
       );
       if (!data.ok) throw new Error(`expected ok:true, got ${JSON.stringify(data)}`);
       if (data.attr !== "alpha") throw new Error(`unexpected attr: ${data.attr}`);
-      if (data.locator !== "#push_buttons_screen") throw new Error(`unexpected locator: ${data.locator}`);
+      if (data.locator !== "push_buttons_screen") throw new Error(`unexpected locator: ${data.locator}`);
     });
 
     // Restore alpha (best-effort)
-    await client.callTool("ui_set_attr", { locator: "#push_buttons_screen", attr: "alpha", value: "1.0", session: SESSION });
+    await client.callTool("ui_set_attr", { locator: "push_buttons_screen", attr: "alpha", value: "1.0", session: SESSION });
 
     // ─── compare_with_design ────────────────────────────────────────────────
     console.log("\n[ compare_with_design ]");
@@ -413,11 +417,11 @@ async function runE2E() {
       if (typeof data.pollCount !== "number") throw new Error("missing pollCount");
     });
 
-    await test("wait appears #push_buttons_screen returns met:true", async () => {
+    await test("wait appears push_buttons_screen returns met:true", async () => {
       const data = await client.callToolJSON<{ met?: boolean }>(
-        "ui_wait", { mode: "appears", locator: "#push_buttons_screen", timeout: 3, session: SESSION }
+        "ui_wait", { mode: "appears", locator: "push_buttons_screen", timeout: 3, session: SESSION }
       );
-      if (!data.met) throw new Error("expected met:true for #push_buttons_screen");
+      if (!data.met) throw new Error("expected met:true for push_buttons_screen");
     });
 
     await test("wait gone __nonexistent__ returns isError=true (timeout)", async () => {
@@ -439,9 +443,9 @@ async function runE2E() {
     console.log("\n[ ui_assert ]");
     await resetToHome(client);
 
-    await test("assert visible #home_buttons_stack passes", async () => {
+    await test("assert visible home_buttons_stack passes", async () => {
       const data = await client.callToolJSON<{ passed?: boolean; matchCount?: number }>(
-        "ui_assert", { mode: "visible", locator: "#home_buttons_stack", session: SESSION }
+        "ui_assert", { mode: "visible", locator: "home_buttons_stack", session: SESSION }
       );
       if (!data.passed) throw new Error("expected passed:true");
       if (data.matchCount !== 1) throw new Error(`expected matchCount 1, got ${data.matchCount}`);
@@ -449,7 +453,7 @@ async function runE2E() {
 
     await test("assert visible __missing__ returns isError=true", async () => {
       const r = await client.callTool("ui_assert", {
-        mode: "visible", locator: "#__absolutely_nonexistent_xyz__", session: SESSION
+        mode: "visible", locator: "__absolutely_nonexistent_xyz__", session: SESSION
       });
       if (!r.isError) throw new Error("expected isError=true for missing locator");
     });
@@ -478,12 +482,12 @@ async function runE2E() {
       if (!data.path.endsWith(".png")) throw new Error(`expected .png path, got: ${data.path}`);
     });
 
-    await test("node screenshot of #push_buttons_screen returns path and locator", async () => {
+    await test("node screenshot of push_buttons_screen returns path and locator", async () => {
       const data = await client.callToolJSON<{ path?: string; locator?: string }>(
-        "ui_screenshot", { locator: "#push_buttons_screen", session: SESSION }
+        "ui_screenshot", { locator: "push_buttons_screen", session: SESSION }
       );
       if (!data.path) throw new Error("missing path");
-      if (data.locator !== "#push_buttons_screen") throw new Error(`unexpected locator: ${data.locator}`);
+      if (data.locator !== "push_buttons_screen") throw new Error(`unexpected locator: ${data.locator}`);
     });
 
     // ─── ui_input (navigate to forms first) ────────────────────────────────
@@ -491,21 +495,23 @@ async function runE2E() {
     await resetToHome(client);
 
     await test("navigate to forms screen", async () => {
-      await client.callToolJSON("ui_tap", { locator: "#push_forms_screen", session: SESSION });
+      await client.callToolJSON("ui_tap", { locator: "push_forms_screen", session: SESSION });
       await new Promise((r) => setTimeout(r, 500));
       // Verify we're on the forms screen
       const r = await client.callTool("ui_assert", {
-        mode: "visible", locator: "#primary_text_field", session: SESSION
+        mode: "visible", locator: "primary_text_field", session: SESSION
       });
       if (r.isError) throw new Error("forms screen did not appear");
     });
 
-    await test("input text into #primary_text_field returns ok:true", async () => {
-      const data = await client.callToolJSON<{ ok?: boolean; text?: string }>(
-        "ui_input", { target: "#primary_text_field", text: "hello e2e", session: SESSION }
+    await test("input text into primary_text_field returns lightweight postState", async () => {
+      const data = await client.callToolJSON<{ ok?: boolean; text?: string; resolvedTarget?: string; postState?: { snapshotId?: string } }>(
+        "ui_input", { target: "primary_text_field", text: "hello e2e", session: SESSION }
       );
       if (!data.ok) throw new Error("expected ok:true");
       if (data.text !== "hello e2e") throw new Error(`unexpected text: ${data.text}`);
+      if (!data.resolvedTarget) throw new Error("missing resolvedTarget");
+      if (!data.postState?.snapshotId) throw new Error("missing postState");
     });
 
     await test("back from forms screen", async () => {
@@ -516,12 +522,12 @@ async function runE2E() {
     // ─── ui_swipe ───────────────────────────────────────────────────────────
     console.log("\n[ ui_swipe ]");
     await resetToHome(client);
-    await client.callToolJSON("ui_tap", { locator: "#switch_tab_feed", session: SESSION });
+    await client.callToolJSON("ui_tap", { locator: "switch_tab_feed", session: SESSION });
     await new Promise((r) => setTimeout(r, 500));
 
     await test("swipe UIScrollView down returns ok:true with target/direction/distance", async () => {
       const data = await client.callToolJSON<{ ok?: boolean; target?: string; direction?: string; distance?: number }>(
-        "ui_swipe", { target: "#long_feed_scroll", direction: "down", distance: 150, session: SESSION }
+        "ui_swipe", { target: "long_feed_scroll", direction: "down", distance: 150, session: SESSION }
       );
       if (!data.ok) throw new Error("expected ok:true");
       if (data.direction !== "down") throw new Error(`unexpected direction: ${data.direction}`);
@@ -530,7 +536,7 @@ async function runE2E() {
 
     await test("swipe UIScrollView up returns ok:true", async () => {
       const data = await client.callToolJSON<{ ok?: boolean }>(
-        "ui_swipe", { target: "#long_feed_scroll", direction: "up", session: SESSION }
+        "ui_swipe", { target: "long_feed_scroll", direction: "up", session: SESSION }
       );
       if (!data.ok) throw new Error("expected ok:true");
     });
@@ -539,30 +545,30 @@ async function runE2E() {
     console.log("\n[ ui_dismiss ]");
     await resetToHome(client);
 
-    await test("tap #show_home_sheet to present a modal sheet", async () => {
-      await client.callToolJSON("ui_tap", { locator: "#show_home_sheet", session: SESSION });
+    await test("tap show_home_sheet to present a modal sheet", async () => {
+      await client.callToolJSON("ui_tap", { locator: "show_home_sheet", session: SESSION });
       await new Promise((r) => setTimeout(r, 500));
-      // Modal is now presented; #dismiss_modal button visible inside it
+      // Modal is now presented; dismiss_modal button visible inside it
       const r = await client.callTool("ui_assert", {
-        mode: "visible", locator: "#dismiss_modal", session: SESSION
+        mode: "visible", locator: "dismiss_modal", session: SESSION
       });
       if (r.isError) throw new Error("modal did not appear");
     });
 
-    await test("dismiss UINavigationController dismisses the modal and returns hierarchy", async () => {
-      // UINavigationController's container view can dismiss presented modals
-      const data = await client.callToolJSON<{ ok?: boolean; hierarchy?: unknown }>(
+    await test("dismiss UINavigationController returns lightweight postState", async () => {
+      const data = await client.callToolJSON<{ ok?: boolean; resolvedTarget?: string; postState?: { snapshotId?: string } }>(
         "ui_dismiss", { target: "UINavigationController", session: SESSION }
       );
       if (!data.ok) throw new Error(`expected ok:true, got ${JSON.stringify(data)}`);
-      if (!data.hierarchy) throw new Error("missing post-action hierarchy");
+      if (!data.resolvedTarget) throw new Error("missing resolvedTarget");
+      if (!data.postState?.snapshotId) throw new Error("missing postState");
     });
 
     await test("modal gone after dismiss (home screen buttons visible)", async () => {
       const wait = await client.callToolJSON<{ met?: boolean }>(
-        "ui_wait", { mode: "gone", locator: "#dismiss_modal", timeout: 3, session: SESSION }
+        "ui_wait", { mode: "gone", locator: "dismiss_modal", timeout: 3, session: SESSION }
       );
-      if (!wait.met) throw new Error("#dismiss_modal did not disappear after dismiss");
+      if (!wait.met) throw new Error("dismiss_modal did not disappear after dismiss");
     });
 
     await new Promise((r) => setTimeout(r, 300));

@@ -4,8 +4,18 @@ import type { ExecFn } from "../runner.js";
 
 function makeExec(assertResult?: object): ExecFn {
   return vi.fn().mockImplementation(async (_bin: string, args: string[]) => {
-    if (args.includes("list")) {
-      return { stdout: JSON.stringify([{ bundleIdentifier: "com.test", port: 1234 }]), stderr: "" };
+    if (args[0] === "hierarchy") {
+      return {
+        stdout: JSON.stringify({
+          appInfo: { appName: "FixtureApp", bundleIdentifier: "com.test", serverVersion: "0.1.0" },
+          fetchedAt: "2026-04-15T10:00:00Z",
+          screenScale: 3,
+          screenSize: { x: 0, y: 0, width: 390, height: 844 },
+          snapshotId: "snap-assert",
+          windows: [],
+        }),
+        stderr: "",
+      };
     }
     const result = assertResult ?? { passed: true, assertion: "visible", locator: "#foo", matchCount: 1, message: "ok" };
     return { stdout: JSON.stringify(result), stderr: "" };

@@ -1,5 +1,6 @@
 import { runCLI, resolveSession } from "../runner.js";
 import type { ExecFn } from "../runner.js";
+import { resolveUniqueNodeLocator } from "./locator.js";
 
 export type SwipeDirection = "up" | "down" | "left" | "right";
 
@@ -40,9 +41,10 @@ export async function uiSwipe(
 ): Promise<UISwipeResult> {
   const session = await resolveSession(input.session, exec);
   const dist = input.distance ?? 200;
+  const resolved = await resolveUniqueNodeLocator(input.target, session, exec);
   const cliArgs = [
     "swipe",
-    input.target,
+    resolved.resolvedTarget,
     "--direction",
     input.direction,
     "--distance",

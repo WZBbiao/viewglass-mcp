@@ -4,10 +4,26 @@ import type { ExecFn } from "../runner.js";
 
 function makeExec(): ExecFn {
   return vi.fn().mockImplementation(async (_bin: string, args: string[]) => {
-    if (args.includes("list")) {
-      return { stdout: JSON.stringify([{ bundleIdentifier: "com.test", port: 1234 }]), stderr: "" };
+    if (args[0] === "query") {
+      if (args[1] === "#list" || args[1] === "#pager" || args[1] === "UIScrollView") {
+        return { stdout: JSON.stringify([{ oid: 66, primaryOid: 66 }]), stderr: "" };
+      }
+      return { stdout: "[]", stderr: "" };
     }
-    return { stdout: "{}", stderr: "" };
+    if (args[0] === "hierarchy") {
+      return {
+        stdout: JSON.stringify({
+          appInfo: { appName: "FixtureApp", bundleIdentifier: "com.test", serverVersion: "0.1.0" },
+          fetchedAt: "2026-04-15T10:00:00Z",
+          screenScale: 3,
+          screenSize: { x: 0, y: 0, width: 390, height: 844 },
+          snapshotId: "snap-swipe",
+          windows: [],
+        }),
+        stderr: "",
+      };
+    }
+    return { stdout: "", stderr: "" };
   });
 }
 
@@ -18,7 +34,7 @@ describe("uiSwipe", () => {
     const swipeCalls = (exec.mock.calls as [string, string[]][]).filter((c) => c[1][0] === "swipe");
     expect(swipeCalls.length).toBe(1);
     const args = swipeCalls[0][1];
-    expect(args).toContain("UIScrollView");
+    expect(args).toContain("66");
     expect(args).toContain("--direction");
     expect(args[args.indexOf("--direction") + 1]).toBe("up");
   });

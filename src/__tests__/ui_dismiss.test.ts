@@ -4,53 +4,48 @@ import type { ExecFn } from "../runner.js";
 
 function makeExec(): ExecFn {
   return vi.fn().mockImplementation(async (_bin: string, args: string[]) => {
-    if (args.includes("list")) {
-      return { stdout: JSON.stringify([{ bundleIdentifier: "com.test", port: 1234 }]), stderr: "" };
+    if (args[0] === "query") {
+      if (args[1] === "#modal") return { stdout: JSON.stringify([{ oid: 91, primaryOid: 91 }]), stderr: "" };
+      return { stdout: "[]", stderr: "" };
     }
     if (args[0] === "hierarchy") {
-      return { stdout: '{"windows":[]}', stderr: "" };
+      return {
+        stdout: JSON.stringify({
+          appInfo: { appName: "FixtureApp", bundleIdentifier: "com.test", serverVersion: "0.1.0" },
+          fetchedAt: "2026-04-15T10:00:00Z",
+          screenScale: 3,
+          screenSize: { x: 0, y: 0, width: 390, height: 844 },
+          snapshotId: "snap-dismiss",
+          windows: [],
+        }),
+        stderr: "",
+      };
     }
     return { stdout: "{}", stderr: "" };
   });
 }
 
 describe("uiDismiss", () => {
-  it("calls dismiss command with target", async () => {
+  it("resolves a plain locator and calls dismiss", async () => {
     const exec = makeExec() as ReturnType<typeof vi.fn>;
-    await uiDismiss({ target: "#modal", session: "com.test@1234" }, exec);
-    const dismissCalls = (exec.mock.calls as [string, string[]][]).filter((c) => c[1][0] === "dismiss");
-    expect(dismissCalls.length).toBe(1);
-    expect(dismissCalls[0][1]).toContain("#modal");
+    await uiDismiss({ target: "modal", session: "com.test@1234" }, exec);
+    const dismissCall = (exec.mock.calls as [string, string[]][]).find((c) => c[1][0] === "dismiss")!;
+    expect(dismissCall[1]).toEqual(["dismiss", "91", "--json", "--session", "com.test@1234"]);
   });
 
-  it("calls refresh after dismiss", async () => {
+  it("calls refresh and hierarchy after dismiss", async () => {
     const exec = makeExec() as ReturnType<typeof vi.fn>;
-    await uiDismiss({ target: "#modal", session: "com.test@1234" }, exec);
+    await uiDismiss({ target: "modal", session: "com.test@1234" }, exec);
     const cmds = (exec.mock.calls as [string, string[]][]).map((c) => c[1][0]);
-    expect(cmds).toContain("refresh");
+    expect(cmds).toEqual(["hierarchy", "query", "dismiss", "refresh", "hierarchy"]);
   });
 
-  it("fetches hierarchy after dismiss", async () => {
-    const exec = makeExec() as ReturnType<typeof vi.fn>;
-    await uiDismiss({ target: "#modal", session: "com.test@1234" }, exec);
-    const cmds = (exec.mock.calls as [string, string[]][]).map((c) => c[1][0]);
-    expect(cmds).toContain("hierarchy");
-  });
-
-  it("returns ok:true, target, and hierarchy", async () => {
+  it("returns lightweight post-action state", async () => {
     const exec = makeExec();
-    const result = await uiDismiss({ target: "#sheet", session: "com.test@1234" }, exec);
+    const result = await uiDismiss({ target: "modal", session: "com.test@1234" }, exec);
     expect(result.ok).toBe(true);
-    expect(result.target).toBe("#sheet");
-    expect(result.hierarchy).toBeDefined();
-  });
-
-  it("calls commands in order: dismiss → refresh → hierarchy", async () => {
-    const exec = makeExec() as ReturnType<typeof vi.fn>;
-    await uiDismiss({ target: "#vc", session: "com.test@1234" }, exec);
-    const cmds = (exec.mock.calls as [string, string[]][]).map((c) => c[1][0]);
-    const idx = (c: string) => cmds.indexOf(c);
-    expect(idx("dismiss")).toBeLessThan(idx("refresh"));
-    expect(idx("refresh")).toBeLessThan(idx("hierarchy"));
+    expect(result.target).toBe("modal");
+    expect(result.resolvedTarget).toBe("91");
+    expect(result.postState.snapshotId).toBe("snap-dismiss");
   });
 });

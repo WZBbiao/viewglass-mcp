@@ -1,5 +1,6 @@
 import { runCLI, resolveSession, parseJSON } from "../runner.js";
 import type { ExecFn } from "../runner.js";
+import { resolveQueryLocatorExpression } from "./locator.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,16 +52,17 @@ export async function uiAssert(
   exec?: ExecFn
 ): Promise<UIAssertResult> {
   const session = await resolveSession(input.session, exec);
+  const resolved = await resolveQueryLocatorExpression(input.locator, session, exec);
 
   let cliArgs: string[];
 
   if (input.mode === "visible") {
-    cliArgs = ["assert", "visible", input.locator, "--json"];
+    cliArgs = ["assert", "visible", resolved.queryExpression, "--json"];
   } else if (input.mode === "text") {
-    cliArgs = ["assert", "text", input.locator, input.expected, "--json"];
+    cliArgs = ["assert", "text", resolved.queryExpression, input.expected, "--json"];
     if (input.contains) cliArgs.push("--contains");
   } else if (input.mode === "count") {
-    cliArgs = ["assert", "count", input.locator, "--json"];
+    cliArgs = ["assert", "count", resolved.queryExpression, "--json"];
     if (input.expected !== undefined) cliArgs.push(String(input.expected));
     if (input.min !== undefined) cliArgs.push("--min", String(input.min));
     if (input.max !== undefined) cliArgs.push("--max", String(input.max));
@@ -69,7 +71,7 @@ export async function uiAssert(
     if (!input.equals && !input.contains) {
       throw new Error("ui_assert attr mode requires either 'equals' or 'contains'");
     }
-    cliArgs = ["assert", "attr", input.locator, "--key", input.key, "--json"];
+    cliArgs = ["assert", "attr", resolved.queryExpression, "--key", input.key, "--json"];
     if (input.equals !== undefined) cliArgs.push("--equals", input.equals);
     if (input.contains !== undefined) cliArgs.push("--contains", input.contains);
   }

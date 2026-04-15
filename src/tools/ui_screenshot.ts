@@ -2,6 +2,7 @@ import { runCLI, resolveSession, parseJSON } from "../runner.js";
 import type { ExecFn } from "../runner.js";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { resolveUniqueNodeLocator } from "./locator.js";
 
 export interface UIScreenshotInput {
   /**
@@ -44,7 +45,8 @@ export async function uiScreenshot(
 
   let cliArgs: string[];
   if (input.locator) {
-    cliArgs = ["screenshot", "node", input.locator, "--output", outputPath, "--json"];
+    const resolved = await resolveUniqueNodeLocator(input.locator, session, exec);
+    cliArgs = ["screenshot", "node", resolved.resolvedTarget, "--output", outputPath, "--json"];
   } else {
     cliArgs = ["screenshot", "screen", "--output", outputPath, "--json"];
   }

@@ -1,5 +1,6 @@
 import { runCLI, resolveSession } from "../runner.js";
 import type { ExecFn } from "../runner.js";
+import { resolveUniqueNodeLocator } from "./locator.js";
 
 export interface UISetAttrInput {
   /** Node OID obtained from ui_query. */
@@ -32,10 +33,12 @@ export async function uiSetAttr(
   exec?: ExecFn
 ): Promise<{ oid?: string; locator?: string; attr: string; value: string; ok: true }> {
   const session = await resolveSession(input.session, exec);
-  const target = input.locator ?? input.oid;
-  if (!target) {
+  if (!input.locator && !input.oid) {
     throw new Error("ui_set_attr requires either 'oid' or 'locator'");
   }
+  const target = input.oid
+    ? input.oid
+    : (await resolveUniqueNodeLocator(input.locator!, session, exec)).resolvedTarget;
   // CLI syntax: attr set <target> <key> <value> [--session <s>]
   await runCLI(["attr", "set", target, input.attr, input.value], {
     session,

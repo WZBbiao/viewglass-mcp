@@ -1,10 +1,12 @@
-import { runCLI, resolveSession, parseJSON } from "../runner.js";
+import { runCLI, resolveSession } from "../runner.js";
 import type { ExecFn } from "../runner.js";
+import { uiSnapshot } from "./ui_snapshot.js";
+import { resolveActionLocator } from "./locator.js";
 
 export type ScrollDirection = "up" | "down" | "left" | "right";
 
 export interface UIScrollInput {
-  /** Locator for the scroll view (UIScrollView, UITableView, UICollectionView). */
+  /** Plain locator string for the scroll view (text, accessibility id, class name, or oid). */
   locator: string;
   /** Scroll direction. */
   direction: ScrollDirection;
@@ -24,7 +26,7 @@ const DIRECTION_DELTA: Record<ScrollDirection, [number, number]> = {
 };
 
 /**
- * Scroll a scroll view in the given direction. Returns post-action hierarchy.
+ * Scroll a scroll view in the given direction. Returns a lightweight post-action summary.
  *
  * Use direction "down" to reveal content below, "up" to scroll back,
  * "left"/"right" for horizontal scroll views.
@@ -32,18 +34,46 @@ const DIRECTION_DELTA: Record<ScrollDirection, [number, number]> = {
 export async function uiScroll(
   input: UIScrollInput,
   exec?: ExecFn
-): Promise<{ scrolled: string; direction: ScrollDirection; hierarchy: unknown }> {
+): Promise<{
+  ok: true;
+  locator: string;
+  resolvedTarget: string;
+  matchedBy: string;
+  direction: ScrollDirection;
+  distance: number;
+  postState: {
+    snapshotId: string;
+    visibleText: string[];
+    controllerHints: string[];
+    bottomBarCandidates: unknown[];
+    groupCount: number;
+  };
+}> {
   const session = await resolveSession(input.session, exec);
   const dist = input.distance ?? 300;
   const [dx, dy] = DIRECTION_DELTA[input.direction];
   const byArg = `${dx * dist},${dy * dist}`;
+  const resolved = await resolveActionLocator(input.locator, session, "scroll", exec);
 
-  const args = ["scroll", input.locator, "--by", byArg];
+  const args = ["scroll", resolved.resolvedTarget, "--by", byArg];
   if (input.animated) args.push("--animated");
 
   await runCLI(args, { session, exec });
   await runCLI(["refresh"], { session, exec });
-  const { stdout } = await runCLI(["hierarchy", "--json"], { session, exec });
-  const hierarchy = parseJSON(stdout, "ui_scroll/hierarchy");
-  return { scrolled: input.locator, direction: input.direction, hierarchy };
+  const snapshot = await uiSnapshot({ session, compact: true }, exec);
+  return {
+    ok: true,
+    locator: input.locator,
+    resolvedTarget: resolved.resolvedTarget,
+    matchedBy: resolved.matchedBy,
+    direction: input.direction,
+    distance: dist,
+    postState: {
+      snapshotId: snapshot.snapshot.snapshotId,
+      visibleText: snapshot.summary.visibleText.slice(0, 12),
+      controllerHints: snapshot.summary.controllerHints.slice(0, 4),
+      bottomBarCandidates: snapshot.summary.bottomBarCandidates,
+      groupCount: snapshot.summary.groupCount,
+    },
+  };
 }

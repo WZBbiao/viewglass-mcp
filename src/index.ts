@@ -88,19 +88,14 @@ server.registerTool(
     description:
       "Find UI nodes matching a locator. Returns an array of matching nodes with oid, " +
       "className, frame, accessibilityIdentifier, and other properties. " +
+      "Pass one plain locator string only: visible text, accessibility identifier, class name, or numeric oid. " +
+      "MCP resolves it internally in a fixed order so agents do not need to guess query DSL. " +
       "Use the returned oid values with ui_attr_get, ui_set_attr, or for invoke calls. " +
-      "To search by visible text (Chinese supported): contains:\"substring\" — " +
-      "searches UILabel text, button title, accessibilityLabel, and accessibilityIdentifier all at once. " +
-      "Class and controller locators are fuzzy by default, so UITabBar, TabBar, and tabbar all match UITabBar. " +
-      "Other locators: #accessibilityIdentifier, @\"exact label\", UIClassName, *ClassSuffix, " +
-      "controller:Class, oid:N, .visible/.hidden/.interactive, ancestor:Class, parent:Class, tag:N, AND/OR/NOT. " +
       "Do NOT use screenshot to find elements — use this tool instead.",
     inputSchema: {
       locator: z
         .string()
-        .describe(
-          "Locator: contains:\"substr\" (full-text search across all text fields) | #accessibilityId | @\"exact label\" | UIClassName / controller:Class (fuzzy by default, lowercase allowed) | oid:N | .visible | .hidden | ancestor:Class | AND/OR/NOT"
-        ),
+        .describe("Plain locator string: visible text, accessibility identifier, class name, or numeric oid."),
       session: sessionSchema,
     },
     annotations: { readOnlyHint: true, idempotentHint: true },
@@ -116,7 +111,7 @@ server.registerTool(
               type: "text",
               text:
                 `ui_query: locator '${locator}' matched 0 nodes. ` +
-                "Try a different accessibilityIdentifier, class name, or OID. " +
+                "Try a different visible text, accessibility identifier, class name, or oid. " +
                 "Call ui_snapshot to inspect the current hierarchy.",
             },
           ],
@@ -166,16 +161,15 @@ server.registerTool(
   "ui_tap",
   {
     description:
-      "Tap a UI element. Locator must match exactly one visible node. " +
+      "Tap a UI element. Pass one plain locator string only: visible text, accessibility identifier, class name, or numeric oid. " +
+      "MCP resolves it internally and returns a lightweight post-action summary instead of the full hierarchy. " +
       "Supports semantic taps on UIControl, UITapGestureRecognizer-backed views, " +
       "UITableViewCell, and UICollectionViewCell, including nested labels inside a cell. " +
-      "Automatically refreshes after tapping and returns the post-action hierarchy " +
-      "so you can confirm navigation or state changes without a separate ui_snapshot call. " +
-      "Returns { tapped: locator, hierarchy: <post-action snapshot> }.",
+      "Returns { ok, locator, resolvedTarget, matchedBy, postState }.",
     inputSchema: {
       locator: z
         .string()
-        .describe("Locator matching exactly one node: '#id', class name, or OID."),
+        .describe("Plain locator string: visible text, accessibility identifier, class name, or numeric oid."),
       session: sessionSchema,
     },
   },
@@ -196,13 +190,14 @@ server.registerTool(
   {
     description:
       "Scroll a UIScrollView, UITableView, or UICollectionView. " +
-      "Returns post-action hierarchy so you can verify newly visible content. " +
+      "Pass one plain locator string only: visible text, accessibility identifier, class name, or numeric oid. " +
+      "Returns a lightweight post-action summary instead of the full hierarchy. " +
       "Use direction 'down' to reveal content below the fold, 'up' to scroll back. " +
       "distance defaults to 300 pts if omitted.",
     inputSchema: {
       locator: z
         .string()
-        .describe("Locator for the scroll view: '#id', class name, or OID."),
+        .describe("Plain locator string for the scroll view: visible text, accessibility identifier, class name, or numeric oid."),
       direction: z.enum(["up", "down", "left", "right"]).describe("Scroll direction."),
       distance: z.number().positive().optional().describe("Distance in pts (default 300)."),
       animated: z.boolean().optional().describe("Whether to animate (default true)."),
@@ -229,13 +224,13 @@ server.registerTool(
       "no recompile needed. Use for visual debugging: tweak colors, fonts, or text " +
       "to match design spec, then read back with ui_attr_get to verify. " +
       "WARNING: Changes are ephemeral and reset on app relaunch. " +
-      "Accepts either a node OID or a locator; prefer locator in agent workflows. " +
+      "Accepts either a node OID or one plain locator string; prefer the plain locator in agent workflows. " +
       "Navigation patterns (get controller OID from ui_query, then use viewglass invoke): " +
       "  pop: invoke <navController-oid> popViewControllerAnimated: true — " +
       "  dismiss modal: invoke <vc-oid> dismissViewControllerAnimated:completion: true nil",
     inputSchema: {
       oid: z.coerce.string().optional().describe("Node OID from ui_query (number or string)."),
-      locator: z.string().optional().describe("Locator to resolve at execution time (preferred)."),
+      locator: z.string().optional().describe("Plain locator string to resolve at execution time (preferred)."),
       attr: z
         .string()
         .describe(
@@ -324,7 +319,7 @@ server.registerTool(
         ),
       target: z
         .string()
-        .describe("Locator: '#accessibilityIdentifier', class name, or OID."),
+        .describe("Plain locator string: visible text, accessibility identifier, class name, or numeric oid."),
       args: z
         .array(z.string())
         .optional()
@@ -364,7 +359,7 @@ server.registerTool(
       mode: z.enum(["appears", "gone", "attr"]).describe("Wait mode."),
       locator: z
         .string()
-        .describe("Locator: '#accessibilityIdentifier', class name, OID, or query expression."),
+        .describe("Plain locator string: visible text, accessibility identifier, class name, or numeric oid."),
       key: z
         .string()
         .optional()
@@ -436,7 +431,7 @@ server.registerTool(
       "  'attr'    — assert node attribute equals/contains expected value.",
     inputSchema: {
       mode: z.enum(["visible", "text", "count", "attr"]).describe("Assert mode."),
-      locator: z.string().describe("Locator: '#accessibilityIdentifier', class name, OID, or query expression."),
+      locator: z.string().describe("Plain locator string: visible text, accessibility identifier, class name, or numeric oid."),
       expected: z
         .string()
         .optional()
@@ -569,7 +564,7 @@ server.registerTool(
       locator: z
         .string()
         .optional()
-        .describe("Capture a specific node instead of full screen. '#id', class name, or OID."),
+        .describe("Capture a specific node instead of full screen using one plain locator string."),
       outputPath: z
         .string()
         .optional()
@@ -599,10 +594,12 @@ server.registerTool(
     description:
       "Enter text into a UITextField or UITextView. " +
       "Dispatches text semantically via the field's input mechanism. " +
-      "Returns { target, text, ok: true } on success. " +
+      "Returns { target, resolvedTarget, matchedBy, text, ok: true, postState } on success. " +
+      "Pass one plain locator string only: visible text, accessibility identifier, class name, or numeric oid. " +
+      "Returns a lightweight post-action summary instead of the full hierarchy. " +
       "Use ui_tap first to focus the field if needed.",
     inputSchema: {
-      target: z.string().describe("Target locator: '#accessibilityIdentifier', class name, or OID."),
+      target: z.string().describe("Plain locator string: visible text, accessibility identifier, class name, or numeric oid."),
       text: z.string().describe("Text to type into the field."),
       session: z
         .string()
@@ -631,7 +628,7 @@ server.registerTool(
       "use it for paging scroll views, carousels, and gesture-driven interactions. " +
       "distance defaults to 200 pts if omitted.",
     inputSchema: {
-      target: z.string().describe("Target locator: '#accessibilityIdentifier', class name, or OID."),
+      target: z.string().describe("Plain locator string: visible text, accessibility identifier, class name, or numeric oid."),
       direction: z.enum(["up", "down", "left", "right"]).describe("Swipe direction."),
       distance: z.number().positive().optional().describe("Swipe distance in pts (default 200)."),
       animated: z.boolean().optional().describe("Animate with ease-in-out (default false)."),
@@ -660,9 +657,10 @@ server.registerTool(
       "Trigger a semantic long press on a UI node. " +
       "Fires the long press gesture recognizer attached to the element. " +
       "Use for context menus, preview interactions, and custom long-press handlers. " +
+      "Pass one plain locator string only: visible text, accessibility identifier, class name, or numeric oid. " +
       "Returns { target, ok: true }.",
     inputSchema: {
-      target: z.string().describe("Target locator: '#accessibilityIdentifier', class name, or OID."),
+      target: z.string().describe("Plain locator string: visible text, accessibility identifier, class name, or numeric oid."),
       session: z
         .string()
         .optional()
@@ -686,15 +684,15 @@ server.registerTool(
   {
     description:
       "Dismiss a UIViewController (modal dismiss or navigation pop). " +
-      "Pass any view or node — Viewglass finds the hosting UIViewController automatically. " +
-      "Returns { target, ok: true, hierarchy } with the post-action UI state so you " +
-      "can confirm the screen changed without a separate ui_snapshot call. " +
+      "Pass one plain locator string only: visible text, accessibility identifier, class name, or numeric oid. " +
+      "The target can be any view or node hosted by the controller. " +
+      "Returns { target, ok: true, resolvedTarget, matchedBy, postState } with a lightweight post-action summary. " +
       "Prefer this over ui_invoke popViewControllerAnimated: for standard navigation.",
     inputSchema: {
       target: z
         .string()
         .describe(
-          "Target locator: '#accessibilityIdentifier', class name, or OID. Can be a view or view controller."
+          "Plain locator string: visible text, accessibility identifier, class name, or numeric oid. Can be a view or view controller."
         ),
       session: z
         .string()

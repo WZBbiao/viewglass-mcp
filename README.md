@@ -19,20 +19,20 @@ and verify the connection — no manual steps required.
 | Tool | Description |
 |---|---|
 | `ui_snapshot` | Capture an agent-first UI snapshot with summary, groups, searchable nodes, and optional rawTree. |
-| `ui_query` | Find nodes by accessibility ID, class name, or OID. |
+| `ui_query` | Find nodes from one plain locator string: visible text, accessibility ID, class name, or numeric oid. |
 | `ui_attr_get` | Get runtime attributes of a node by OID. |
-| `ui_tap` | Tap a node and return post-action hierarchy. Supports UIControl, gesture-backed views, UITableViewCell, and UICollectionViewCell. |
-| `ui_scroll` | Scroll a scroll view and return post-action hierarchy. |
+| `ui_tap` | Tap a node from one plain locator string and return a lightweight post-action summary. Supports UIControl, gesture-backed views, UITableViewCell, and UICollectionViewCell. |
+| `ui_scroll` | Scroll a scroll view from one plain locator string and return a lightweight post-action summary. |
 | `ui_set_attr` | Set an attribute on a node at runtime (live, no recompile). |
 | `ui_invoke` | Call any ObjC selector on any node — the highest-leverage tool. |
 | `ui_wait` | Poll until a node appears, disappears, or an attribute matches. |
 | `ui_assert` | Assert visibility, text, count, or attribute — fails as MCP error. |
 | `ui_scan` | List all running Viewglass sessions. |
 | `ui_screenshot` | Capture a PNG of the full screen or a specific node. |
-| `ui_input` | Type text into a UITextField / UITextView. |
+| `ui_input` | Type text into a UITextField / UITextView using one plain locator string and return a lightweight post-action summary. |
 | `ui_swipe` | Swipe a node in a direction. |
 | `ui_long_press` | Long-press a node. |
-| `ui_dismiss` | Dismiss a presented view controller. |
+| `ui_dismiss` | Dismiss a presented view controller using one plain locator string and return a lightweight post-action summary. |
 | `compare_with_design` | Screenshot device + return Figma URL for Vision diff. |
 
 ## Requirements

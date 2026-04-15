@@ -3,7 +3,28 @@ import { uiSetAttr } from "../tools/ui_set_attr.js";
 import type { ExecFn } from "../runner.js";
 
 function makeExec(): ExecFn {
-  return vi.fn().mockResolvedValue({ stdout: "", stderr: "" });
+  return vi.fn().mockImplementation(async (_bin: string, args: string[]) => {
+    if (args[0] === "query") {
+      if (args[1] === "#primary_text_field" || args[1] === "#push_buttons_screen") {
+        return { stdout: JSON.stringify([{ oid: 5678, primaryOid: 5678 }]), stderr: "" };
+      }
+      return { stdout: "[]", stderr: "" };
+    }
+    if (args[0] === "hierarchy") {
+      return {
+        stdout: JSON.stringify({
+          appInfo: { appName: "FixtureApp", bundleIdentifier: "com.test", serverVersion: "0.1.0" },
+          fetchedAt: "2026-04-15T10:00:00Z",
+          screenScale: 3,
+          screenSize: { x: 0, y: 0, width: 390, height: 844 },
+          snapshotId: "snap-set-attr",
+          windows: [],
+        }),
+        stderr: "",
+      };
+    }
+    return { stdout: "", stderr: "" };
+  });
 }
 
 describe("uiSetAttr", () => {
@@ -24,16 +45,17 @@ describe("uiSetAttr", () => {
   it("supports locator targets and returns locator in confirmation", async () => {
     const exec = makeExec() as ReturnType<typeof vi.fn>;
     const result = await uiSetAttr({
-      locator: "#primary_text_field",
+      locator: "primary_text_field",
       attr: "alpha",
       value: "0.8",
       session: "com.test@1234",
     }, exec);
-    expect(exec.mock.calls[0][1]).toEqual([
-      "attr", "set", "#primary_text_field", "alpha", "0.8", "--session", "com.test@1234",
+    const attrSetCall = (exec.mock.calls as [string, string[]][]).find((c) => c[1][0] === "attr");
+    expect(attrSetCall?.[1]).toEqual([
+      "attr", "set", "5678", "alpha", "0.8", "--session", "com.test@1234",
     ]);
     expect(result).toEqual({
-      locator: "#primary_text_field",
+      locator: "primary_text_field",
       attr: "alpha",
       value: "0.8",
       ok: true,

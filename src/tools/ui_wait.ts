@@ -1,5 +1,6 @@
 import { runCLI, resolveSession, parseJSON } from "../runner.js";
 import type { ExecFn } from "../runner.js";
+import { resolveQueryLocatorExpression } from "./locator.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -55,22 +56,23 @@ export async function uiWait(
   exec?: ExecFn
 ): Promise<UIWaitResult> {
   const session = await resolveSession(input.session, exec);
+  const resolved = await resolveQueryLocatorExpression(input.locator, session, exec);
   const timeoutArgs = input.timeout ? ["--timeout", String(input.timeout)] : [];
   const intervalArgs = input.intervalMs ? ["--interval-ms", String(input.intervalMs)] : [];
 
   let cliArgs: string[];
 
   if (input.mode === "appears") {
-    cliArgs = ["wait", "appears", input.locator, "--json", ...timeoutArgs, ...intervalArgs];
+    cliArgs = ["wait", "appears", resolved.queryExpression, "--json", ...timeoutArgs, ...intervalArgs];
   } else if (input.mode === "gone") {
-    cliArgs = ["wait", "gone", input.locator, "--json", ...timeoutArgs, ...intervalArgs];
+    cliArgs = ["wait", "gone", resolved.queryExpression, "--json", ...timeoutArgs, ...intervalArgs];
   } else {
     // attr mode — TypeScript narrows to the attr branch here
     const attrInput = input as Extract<UIWaitInput, { mode: "attr" }>;
     if (!attrInput.equals && !attrInput.contains) {
       throw new Error("ui_wait attr mode requires either 'equals' or 'contains'");
     }
-    cliArgs = ["wait", "attr", attrInput.locator, "--key", attrInput.key, "--json", ...timeoutArgs, ...intervalArgs];
+    cliArgs = ["wait", "attr", resolved.queryExpression, "--key", attrInput.key, "--json", ...timeoutArgs, ...intervalArgs];
     if (attrInput.equals !== undefined) cliArgs.push("--equals", attrInput.equals);
     if (attrInput.contains !== undefined) cliArgs.push("--contains", attrInput.contains);
   }
