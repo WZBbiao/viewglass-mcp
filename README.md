@@ -122,6 +122,18 @@ Optional flags:
 - `VIEWGLASS_MCP_LOG_FILE=/tmp/viewglass-mcp.log`: write logs to a file instead of `stderr`
 - `VIEWGLASS_MCP_LOG_SPLIT_BY_SESSION=1`: when `VIEWGLASS_MCP_LOG_FILE` is set, write one file per session
 
+Export the latest contiguous run from a session log into a replay-oriented flow draft:
+
+```bash
+npm run export:flow -- /tmp/viewglass-mcp.log.com.example.app@47175.log
+```
+
+Optional flags:
+
+- `-- --all-runs`: export every detected run in the log file
+- `-- --include-screenshots`: keep screenshot steps in the draft
+- `-- --gap-ms 120000`: change the run split threshold
+
 When session logging is enabled, each line includes `session=<bundleId@port>` when the tool/CLI call has one.  
 With file splitting enabled, examples look like:
 
