@@ -89,6 +89,8 @@ server.registerTool(
       "The result includes app/session metadata, a summary, inferred switcher/navigation groups, " +
       "and a flattened node index with searchableText and actionTargetOid fields so agents can " +
       "find targets without guessing UIKit class names. " +
+      "Best practice: for any navigation or custom UI task, call ui_snapshot first to understand the current page, " +
+      "then use ui_tap/ui_query with a concrete visible label from the snapshot. " +
       "Use filter to narrow to a specific class or locator. Set compact=false only when you also need rawTree.",
     inputSchema: {
       session: sessionSchema,
@@ -126,6 +128,8 @@ server.registerTool(
       "className, frame, accessibilityIdentifier, and other properties. " +
       "Pass one plain locator string only: visible text, accessibility identifier, class name, or numeric oid. " +
       "MCP resolves it internally in a fixed order so agents do not need to guess query DSL. " +
+      "Best practice: use ui_query after ui_snapshot has confirmed the current page and likely target. " +
+      "Do not use ui_query as the first step to discover where you are in the app. " +
       "Use the returned oid values with ui_attr_get, ui_set_attr, or for invoke calls. " +
       "Do NOT use screenshot to find elements — use this tool instead.",
     inputSchema: {
@@ -203,6 +207,8 @@ server.registerTool(
       "MCP resolves it internally and returns an execution summary only. " +
       "Supports semantic taps on UIControl, UITapGestureRecognizer-backed views, " +
       "UITableViewCell, and UICollectionViewCell, including nested labels inside a cell. " +
+      "Best practice: for tab bars, switchers, settings lists, or any custom navigation surface, call ui_snapshot first, " +
+      "then tap the exact visible label from the snapshot instead of guessing UIKit private class names. " +
       "Returns { ok, locator, resolvedTarget, matchedBy }.",
     inputSchema: {
       locator: z

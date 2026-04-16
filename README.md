@@ -21,19 +21,40 @@ and verify the connection — no manual steps required.
 | `ui_snapshot` | Capture an agent-first UI snapshot with summary, groups, searchable nodes, and optional rawTree. |
 | `ui_query` | Find nodes from one plain locator string: visible text, accessibility ID, class name, or numeric oid. |
 | `ui_attr_get` | Get runtime attributes of a node by OID. |
-| `ui_tap` | Tap a node from one plain locator string and return a lightweight post-action summary. Supports UIControl, gesture-backed views, UITableViewCell, and UICollectionViewCell. |
-| `ui_scroll` | Scroll a scroll view from one plain locator string and return a lightweight post-action summary. |
+| `ui_tap` | Tap a node from one plain locator string and return an execution summary. Supports UIControl, gesture-backed views, UITableViewCell, and UICollectionViewCell. |
+| `ui_scroll` | Scroll a scroll view from one plain locator string and return an execution summary. |
 | `ui_set_attr` | Set an attribute on a node at runtime (live, no recompile). |
 | `ui_invoke` | Call any ObjC selector on any node — the highest-leverage tool. |
 | `ui_wait` | Poll until a node appears, disappears, or an attribute matches. |
 | `ui_assert` | Assert visibility, text, count, or attribute — fails as MCP error. |
 | `ui_scan` | List all running Viewglass sessions. |
 | `ui_screenshot` | Capture a PNG of the full screen or a specific node. |
-| `ui_input` | Type text into a UITextField / UITextView using one plain locator string and return a lightweight post-action summary. |
+| `ui_input` | Type text into a UITextField / UITextView using one plain locator string and return an execution summary. |
 | `ui_swipe` | Swipe a node in a direction. |
 | `ui_long_press` | Long-press a node. |
-| `ui_dismiss` | Dismiss a presented view controller using one plain locator string and return a lightweight post-action summary. |
+| `ui_dismiss` | Dismiss a presented view controller using one plain locator string and return an execution summary. |
 | `compare_with_design` | Screenshot device + return Figma URL for Vision diff. |
+
+## Recommended agent workflow
+
+For page navigation, settings flows, tab switching, and custom UI:
+
+1. Start with `ui_snapshot`
+   - Use it to understand the current page, visible labels, groups, and likely action targets.
+   - Treat it as the source of truth for "where am I right now?".
+2. Then use `ui_tap` or `ui_query`
+   - Reuse the exact visible label found in the snapshot.
+   - Prefer user-visible labels over UIKit private class guesses.
+3. Use `ui_wait` or another `ui_snapshot` to verify transitions
+   - Do not assume a tap has finished a navigation animation unless you verify it.
+4. Use `ui_attr_get` only after the correct node is known
+   - This is for reading precise runtime values such as text color or font.
+
+Avoid this pattern:
+
+- guessing `UITabBar`, `UITabBarButton`, `UIButton`, or private UIKit classes first
+- using `ui_query` as the first step to figure out what page is on screen
+- taking a screenshot before checking the structured snapshot, unless the task is explicitly visual
 
 ## Requirements
 

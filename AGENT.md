@@ -17,6 +17,31 @@ Stack:
 - **viewglass-mcp** — MCP server (this npm package, bundles the CLI binary)
 - **ViewglassServer** — iOS library embedded in the app (Debug builds only)
 
+## Operating discipline
+
+Use these tools in this order unless the task is trivial and the target is already certain.
+
+1. `ui_snapshot`
+   - Always start here for navigation, tab switching, settings pages, custom UI, and any unknown screen.
+   - Use the snapshot summary, groups, nodes, and visible labels to understand the current page.
+2. `ui_tap` / `ui_query`
+   - Use the exact visible label you found in `ui_snapshot`.
+   - Prefer user-visible labels over UIKit private class names.
+   - Do not guess `UITabBar`, `UITabBarButton`, `UIButton`, or private wrapper classes unless the snapshot already proves they are the right target.
+3. `ui_wait` or another `ui_snapshot`
+   - Use this to confirm navigation, modal transitions, and list updates.
+4. `ui_attr_get`
+   - Use only after the correct target has been located.
+
+Avoid these anti-patterns:
+
+- starting with `ui_query` just to figure out which page is currently visible
+- taking screenshots before using the structured snapshot, unless the task is explicitly visual
+- inventing alternate locator DSL such as `@"..."` or private query syntax
+- guessing UIKit internal class names before reading the snapshot
+
+If `ui_snapshot` is large, it is acceptable to parse the returned JSON programmatically. That is a valid agent strategy. The important constraint is to base decisions on the snapshot first, not on blind UIKit guesses.
+
 ---
 
 ## Step 1 — Configure viewglass-mcp in the AI client
