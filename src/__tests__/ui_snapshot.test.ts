@@ -200,7 +200,7 @@ const hierarchyFixture = {
                     oid: 231,
                     primaryOid: 231,
                     oidType: "view",
-                    className: "UIView",
+                    className: "_UITabBarSelectedContentView",
                     frame: { x: 288, y: 782, width: 64, height: 34 },
                     bounds: { x: 0, y: 0, width: 64, height: 34 },
                     isHidden: false,
@@ -288,6 +288,12 @@ describe("uiSnapshot", () => {
     expect(result.groups).toHaveLength(1);
     expect(result.groups[0]?.role).toBe("bottomNavigation");
     expect(result.groups[0]?.itemLabels).toEqual(["遊戲", "排行榜", "Me"]);
+    expect(result.groups[0]?.items).toEqual([
+      expect.objectContaining({ oid: 210, label: "遊戲", selected: false }),
+      expect.objectContaining({ oid: 220, label: "排行榜", selected: false }),
+      expect.objectContaining({ oid: 230, label: "Me", selected: true }),
+    ]);
+    expect(result.groups[0]?.selectedOid).toBe(230);
 
     const gameLabel = result.nodes.find((node) => node.oid === 211);
     expect(gameLabel?.text).toBe("遊戲");

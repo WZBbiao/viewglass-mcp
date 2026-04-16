@@ -39,6 +39,9 @@ type SnapshotGroupLike = {
   role: "bottomNavigation" | "topSwitcher";
   itemOids: number[];
   itemLabels: string[];
+  items?: Array<{ oid: number; label: string; selected?: boolean; selectedReason?: string }>;
+  selectedOid?: number | null;
+  selectedReason?: string;
 };
 
 function escapeContains(term: string): string {
@@ -153,20 +156,15 @@ function classifySnapshotNodes(raw: string, nodes: SnapshotLikeNode[]) {
 
 function classifyGroups(raw: string, groups: SnapshotGroupLike[]) {
   const lower = raw.toLocaleLowerCase();
-  const exact = groups.flatMap((group) =>
-    group.itemLabels.flatMap((label, index) =>
-      label.toLocaleLowerCase() === lower
-        ? [{ group, itemOid: group.itemOids[index], label }]
-        : []
-    )
-  );
-  const contains = groups.flatMap((group) =>
-    group.itemLabels.flatMap((label, index) =>
-      label.toLocaleLowerCase().includes(lower)
-        ? [{ group, itemOid: group.itemOids[index], label }]
-        : []
-    )
-  );
+  const entries = groups.flatMap((group) => {
+    const items: Array<{ oid: number; label: string; selected?: boolean; selectedReason?: string }> =
+      group.items ?? group.itemLabels.map((label, index) => ({ oid: group.itemOids[index], label, selected: false }));
+    return items.map((item) => ({ group, itemOid: item.oid, label: item.label, selected: item.selected, selectedReason: item.selectedReason }));
+  });
+  const exact = entries.filter((entry) => entry.label.toLocaleLowerCase() === lower);
+  const contains = entries.filter((entry) => entry.label.toLocaleLowerCase().includes(lower));
+  exact.sort((a, b) => Number(Boolean(b.selected)) - Number(Boolean(a.selected)));
+  contains.sort((a, b) => Number(Boolean(b.selected)) - Number(Boolean(a.selected)));
   return { exact, contains };
 }
 

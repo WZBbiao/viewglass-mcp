@@ -101,6 +101,14 @@ interface UISnapshotNode {
   groupId?: string;
 }
 
+interface UISnapshotGroupItem {
+  oid: number;
+  label: string;
+  frame: RawRect;
+  selected: boolean;
+  selectedReason?: string;
+}
+
 interface UISnapshotGroup {
   id: string;
   role: "bottomNavigation" | "topSwitcher";
@@ -108,7 +116,9 @@ interface UISnapshotGroup {
   frame: RawRect;
   itemOids: number[];
   itemLabels: string[];
+  items: UISnapshotGroupItem[];
   selectedOid?: number | null;
+  selectedReason?: string;
 }
 
 interface UISnapshotSummary {
@@ -374,6 +384,7 @@ function shouldPreferAncestorAsActionTarget(best: RawNode, ancestor: RawNode): b
   const bestArea = Math.max(1, best.frame.width * best.frame.height);
   const ancestorArea = Math.max(1, ancestor.frame.width * ancestor.frame.height);
   const bestIsLeafLike = /Label|ImageView|ButtonLabel/i.test(bestClass);
+  const bestLooksSelectedWrapper = /Selected/i.test(bestClass);
   const ancestorLooksActionable =
     Boolean(ancestor.isUserInteractionEnabled) ||
     /Button|Cell|Tab|Segment|Control/i.test(ancestorClass);
@@ -381,10 +392,17 @@ function shouldPreferAncestorAsActionTarget(best: RawNode, ancestor: RawNode): b
   if (!ancestorLooksActionable) {
     return false;
   }
+  const bestAlreadyActionable = Boolean(best.isUserInteractionEnabled) && /Button|Cell|Tab|Segment|Control/i.test(bestClass);
+  if (bestAlreadyActionable && ancestorArea > bestArea * 1.5 && !bestLooksSelectedWrapper) {
+    return false;
+  }
   if (bestIsLeafLike && ancestorArea >= bestArea * 1.2) {
     return true;
   }
-  if (/UIButton|Cell/i.test(ancestorClass)) {
+  if (/UIButton|Cell|Tab|Segment|Control/i.test(ancestorClass)) {
+    return true;
+  }
+  if (bestLooksSelectedWrapper && ancestorArea >= bestArea) {
     return true;
   }
   if (bestIsLeafLike && /Tab|Segment|Control/i.test(ancestorClass) && ancestorArea >= bestArea) {
@@ -432,21 +450,23 @@ function buildSwitcherGroups(
           ...Object.values(extractTextSources(node)),
           ...Object.values(extractTextSources(nodesByOid.get(actionOid) ?? node)),
         ]),
+        selectedReason: inferSelectedReason(node, nodesByOid.get(actionOid) ?? node, nodesByOid),
       };
     });
 
-  const uniqueTargets = new Map<number, { target: RawNode; texts: string[] }>();
+  const uniqueTargets = new Map<number, { target: RawNode; texts: string[]; selectedReason?: string }>();
   for (const candidate of candidates) {
     const oid = candidate.target.oid;
     const existing = uniqueTargets.get(oid);
     if (!existing) {
-      uniqueTargets.set(oid, { target: candidate.target, texts: candidate.texts });
+      uniqueTargets.set(oid, { target: candidate.target, texts: candidate.texts, selectedReason: candidate.selectedReason });
     } else {
       existing.texts = dedupeStrings([...existing.texts, ...candidate.texts]);
+      existing.selectedReason = existing.selectedReason ?? candidate.selectedReason;
     }
   }
 
-  const bottomTargets = [...uniqueTargets.values()]
+  const bottomTargets = dedupeGroupItems([...uniqueTargets.values()])
     .filter(({ target, texts }) => texts.length > 0 && target.frame.y >= screenSize.height * 0.7)
     .sort((a, b) => a.target.frame.x - b.target.frame.x);
 
@@ -456,7 +476,7 @@ function buildSwitcherGroups(
     if (group) groups.push(group);
   }
 
-  const topTargets = [...uniqueTargets.values()]
+  const topTargets = dedupeGroupItems([...uniqueTargets.values()])
     .filter(({ target, texts }) => texts.length > 0 && target.frame.y <= screenSize.height * 0.25)
     .sort((a, b) => a.target.frame.x - b.target.frame.x);
 
@@ -471,16 +491,28 @@ function buildSwitcherGroups(
 function makeGroup(
   id: string,
   role: "bottomNavigation" | "topSwitcher",
-  items: Array<{ target: RawNode; texts: string[] }>
+  items: Array<{ target: RawNode; texts: string[]; selectedReason?: string }>
 ): UISnapshotGroup | undefined {
-  const labels = items.map((item) => item.texts[0]).filter(Boolean) as string[];
-  if (labels.length < 2) return undefined;
+  const groupItems = items
+    .map((item) => ({
+      oid: item.target.primaryOid ?? item.target.oid,
+      label: item.texts[0],
+      frame: item.target.frame,
+      selected: Boolean(item.selectedReason),
+      selectedReason: item.selectedReason,
+    }))
+    .filter((item) => Boolean(item.label)) as UISnapshotGroupItem[];
+  if (groupItems.length < 2) return undefined;
 
-  const itemOids = items.map((item) => item.target.primaryOid ?? item.target.oid);
+  const labels = groupItems.map((item) => item.label);
+  const itemOids = groupItems.map((item) => item.oid);
   const xs = items.map((item) => item.target.frame.x);
   const ys = items.map((item) => item.target.frame.y);
   const rights = items.map((item) => item.target.frame.x + item.target.frame.width);
   const bottoms = items.map((item) => item.target.frame.y + item.target.frame.height);
+  const selectedItems = groupItems.filter((item) => item.selected);
+  const selectedOid = selectedItems.length === 1 ? selectedItems[0].oid : null;
+  const selectedReason = selectedItems.length === 1 ? selectedItems[0].selectedReason : undefined;
 
   return {
     id,
@@ -494,8 +526,79 @@ function makeGroup(
     },
     itemOids,
     itemLabels: labels,
-    selectedOid: null,
+    items: groupItems,
+    selectedOid,
+    selectedReason,
   };
+}
+
+function dedupeGroupItems(
+  items: Array<{ target: RawNode; texts: string[]; selectedReason?: string }>
+): Array<{ target: RawNode; texts: string[]; selectedReason?: string }> {
+  const deduped: Array<{ target: RawNode; texts: string[]; selectedReason?: string }> = [];
+
+  for (const item of items.sort((a, b) => a.target.frame.x - b.target.frame.x)) {
+    const labelKey = item.texts[0]?.trim().toLocaleLowerCase();
+    const centerX = item.target.frame.x + item.target.frame.width / 2;
+    const existing = deduped.find((candidate) => {
+      const candidateLabel = candidate.texts[0]?.trim().toLocaleLowerCase();
+      const candidateCenterX = candidate.target.frame.x + candidate.target.frame.width / 2;
+      const centerClose = Math.abs(candidateCenterX - centerX) <= Math.max(18, Math.min(candidate.target.frame.width, item.target.frame.width) * 0.6);
+      const overlaps = horizontalOverlap(candidate.target.frame, item.target.frame) >= 0.4;
+      return Boolean(candidateLabel) && Boolean(labelKey) && candidateLabel === labelKey && (centerClose || overlaps);
+    });
+    if (!existing) {
+      deduped.push(item);
+      continue
+    }
+    existing.texts = dedupeStrings([...existing.texts, ...item.texts]);
+    existing.selectedReason = existing.selectedReason ?? item.selectedReason;
+    if (shouldReplaceGroupCandidate(existing, item)) {
+      existing.target = item.target;
+    }
+  }
+
+  return deduped;
+}
+
+function horizontalOverlap(a: RawRect, b: RawRect): number {
+  const left = Math.max(a.x, b.x);
+  const right = Math.min(a.x + a.width, b.x + b.width);
+  const overlap = Math.max(0, right - left);
+  const minWidth = Math.max(1, Math.min(a.width, b.width));
+  return overlap / minWidth;
+}
+
+function shouldReplaceGroupCandidate(
+  current: { target: RawNode; texts: string[]; selectedReason?: string },
+  incoming: { target: RawNode; texts: string[]; selectedReason?: string }
+): boolean {
+  if (!current.selectedReason && incoming.selectedReason) return true;
+  const currentArea = Math.max(1, current.target.frame.width * current.target.frame.height);
+  const incomingArea = Math.max(1, incoming.target.frame.width * incoming.target.frame.height);
+  if (incomingArea > currentArea * 1.05) return true;
+  return false;
+}
+
+function inferSelectedReason(
+  source: RawNode,
+  target: RawNode,
+  nodesByOid: Map<number, RawNode>
+): string | undefined {
+  const selectedPattern = /Selected/i;
+  if (selectedPattern.test(source.className)) return `source class ${source.className}`;
+  if (selectedPattern.test(target.className)) return `target class ${target.className}`;
+  let probe = source;
+  let steps = 0;
+  while (probe.parentOid && steps < 4) {
+    const parent = nodesByOid.get(probe.parentOid);
+    if (!parent) break;
+    if (selectedPattern.test(parent.className)) return `ancestor class ${parent.className}`;
+    if ((parent.primaryOid ?? parent.oid) === (target.primaryOid ?? target.oid)) break;
+    probe = parent;
+    steps += 1;
+  }
+  return undefined;
 }
 
 function buildSummary(hierarchy: RawHierarchy, nodes: UISnapshotNode[], groups: UISnapshotGroup[]): UISnapshotSummary {
@@ -507,7 +610,7 @@ function buildSummary(hierarchy: RawHierarchy, nodes: UISnapshotNode[], groups: 
       groupId: group.id,
       className: group.containerClassName,
       labelHints: group.itemLabels,
-      selectedLabel: undefined,
+      selectedLabel: group.items.find((item) => item.selected)?.label,
       selectedNodeId: group.selectedOid ? `node_${group.selectedOid}` : undefined,
       frame: group.frame,
     }));
