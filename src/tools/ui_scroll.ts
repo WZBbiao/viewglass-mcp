@@ -1,12 +1,11 @@
 import { runCLI, resolveSession } from "../runner.js";
 import type { ExecFn } from "../runner.js";
-import { resolveActionLocator } from "./locator.js";
 
 export type ScrollDirection = "up" | "down" | "left" | "right";
 
 export interface UIScrollInput {
-  /** Plain locator string for the scroll view (text, accessibility id, class name, or oid). */
-  locator: string;
+  /** Executable node oid from ui_snapshot. */
+  oid: string;
   /** Scroll direction. */
   direction: ScrollDirection;
   /** Distance in pts. Defaults to 300 if omitted. */
@@ -35,27 +34,25 @@ export async function uiScroll(
   exec?: ExecFn
 ): Promise<{
   ok: true;
-  locator: string;
-  resolvedTarget: string;
-  matchedBy: string;
+  oid: string;
   direction: ScrollDirection;
   distance: number;
 }> {
+  if (!input.oid || String(input.oid).trim() === "") {
+    throw new Error("ui_scroll requires an exact oid from ui_snapshot. First inspect ui_snapshot.groups/nodes, then pass that oid to ui_scroll.");
+  }
   const session = await resolveSession(input.session, exec);
   const dist = input.distance ?? 300;
   const [dx, dy] = DIRECTION_DELTA[input.direction];
   const byArg = `${dx * dist},${dy * dist}`;
-  const resolved = await resolveActionLocator(input.locator, session, "scroll", exec);
 
-  const args = ["scroll", resolved.resolvedTarget, "--by", byArg];
+  const args = ["scroll", input.oid, "--by", byArg];
   if (input.animated) args.push("--animated");
 
   await runCLI(args, { session, exec });
   return {
     ok: true,
-    locator: input.locator,
-    resolvedTarget: resolved.resolvedTarget,
-    matchedBy: resolved.matchedBy,
+    oid: input.oid,
     direction: input.direction,
     distance: dist,
   };

@@ -1,23 +1,16 @@
 import { runCLI, resolveSession } from "../runner.js";
 import type { ExecFn } from "../runner.js";
-import { resolveActionLocator } from "./locator.js";
 
 export interface UIDismissInput {
-  /**
-   * Plain locator string: visible text, accessibility identifier, class name, or numeric oid.
-   * The target can be a UIViewController node or any view hosted by one.
-   * The UIViewController will be dismissed (modal) or popped (navigation).
-   */
-  target: string;
+  /** Executable node oid from ui_snapshot. The target can be a UIViewController node or any view hosted by one. */
+  oid: string;
   /** Viewglass session in bundleId@port format. Auto-detected if omitted. */
   session?: string;
 }
 
 export interface UIDismissResult {
-  target: string;
+  oid: string;
   ok: true;
-  resolvedTarget: string;
-  matchedBy: string;
 }
 
 /**
@@ -36,13 +29,13 @@ export async function uiDismiss(
   input: UIDismissInput,
   exec?: ExecFn
 ): Promise<UIDismissResult> {
+  if (!input.oid || String(input.oid).trim() === "") {
+    throw new Error("ui_dismiss requires an exact oid from ui_snapshot. First inspect ui_snapshot.groups/nodes, then pass that oid to ui_dismiss.");
+  }
   const session = await resolveSession(input.session, exec);
-  const resolved = await resolveActionLocator(input.target, session, "dismiss", exec);
-  await runCLI(["dismiss", resolved.resolvedTarget, "--json"], { session, exec });
+  await runCLI(["dismiss", input.oid, "--json"], { session, exec });
   return {
-    target: input.target,
+    oid: input.oid,
     ok: true,
-    resolvedTarget: resolved.resolvedTarget,
-    matchedBy: resolved.matchedBy,
   };
 }

@@ -185,25 +185,23 @@ server.registerTool(
   "ui_scroll",
   {
     description:
-      "Scroll a UIScrollView, UITableView, or UICollectionView. " +
-      "Pass one plain locator string only: visible text, accessibility identifier, class name, or numeric oid. " +
+      "Scroll a UIScrollView, UITableView, or UICollectionView by oid only. " +
+      "First call ui_snapshot, inspect groups/nodes, then pass the exact oid here. " +
       "Returns an execution summary only. " +
       "Use direction 'down' to reveal content below the fold, 'up' to scroll back. " +
       "distance defaults to 300 pts if omitted.",
     inputSchema: {
-      locator: z
-        .string()
-        .describe("Plain locator string for the scroll view: visible text, accessibility identifier, class name, or numeric oid."),
+      oid: z.coerce.string().describe("Executable node oid from ui_snapshot."),
       direction: z.enum(["up", "down", "left", "right"]).describe("Scroll direction."),
       distance: z.number().positive().optional().describe("Distance in pts (default 300)."),
       animated: z.boolean().optional().describe("Whether to animate (default true)."),
       session: sessionSchema,
     },
   },
-  async ({ locator, direction, distance, animated, session }) =>
-    withToolLogging("ui_scroll", { locator, direction, distance, animated, session }, async () => {
+  async ({ oid, direction, distance, animated, session }) =>
+    withToolLogging("ui_scroll", { oid, direction, distance, animated, session }, async () => {
       try {
-        const result = await uiScroll({ locator, direction, distance, animated, session });
+        const result = await uiScroll({ oid, direction, distance, animated, session });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (e) {
         return { isError: true, content: [{ type: "text", text: String(e) }] };
@@ -597,14 +595,13 @@ server.registerTool(
   "ui_input",
   {
     description:
-      "Enter text into a UITextField or UITextView. " +
+      "Enter text into a UITextField or UITextView by oid only. " +
       "Dispatches text semantically via the field's input mechanism. " +
-      "Returns { target, resolvedTarget, matchedBy, text, ok: true } on success. " +
-      "Pass one plain locator string only: visible text, accessibility identifier, class name, or numeric oid. " +
+      "First call ui_snapshot, inspect groups/nodes, then pass the exact oid here. " +
       "Returns an execution summary only. " +
       "Use ui_tap first to focus the field if needed.",
     inputSchema: {
-      target: z.string().describe("Plain locator string: visible text, accessibility identifier, class name, or numeric oid."),
+      oid: z.coerce.string().describe("Executable node oid from ui_snapshot."),
       text: z.string().describe("Text to type into the field."),
       session: z
         .string()
@@ -612,10 +609,10 @@ server.registerTool(
         .describe("Session in bundleId@port format. Auto-detected if omitted."),
     },
   },
-  async ({ target, text, session }) =>
-    withToolLogging("ui_input", { target, text, session }, async () => {
+  async ({ oid, text, session }) =>
+    withToolLogging("ui_input", { oid, text, session }, async () => {
       try {
-        const result = await uiInput({ target, text, session });
+        const result = await uiInput({ oid, text, session });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (e) {
         return { isError: true, content: [{ type: "text", text: String(e) }] };
@@ -691,27 +688,23 @@ server.registerTool(
   "ui_dismiss",
   {
     description:
-      "Dismiss a UIViewController (modal dismiss or navigation pop). " +
-      "Pass one plain locator string only: visible text, accessibility identifier, class name, or numeric oid. " +
+      "Dismiss a UIViewController (modal dismiss or navigation pop) by oid only. " +
+      "First call ui_snapshot, inspect groups/nodes, then pass the exact oid here. " +
       "The target can be any view or node hosted by the controller. " +
-      "Returns { target, ok: true, resolvedTarget, matchedBy }. " +
+      "Returns { oid, ok: true }. " +
       "Prefer this over ui_invoke popViewControllerAnimated: for standard navigation.",
     inputSchema: {
-      target: z
-        .string()
-        .describe(
-          "Plain locator string: visible text, accessibility identifier, class name, or numeric oid. Can be a view or view controller."
-        ),
+      oid: z.coerce.string().describe("Executable node oid from ui_snapshot. Can be a view or view controller."),
       session: z
         .string()
         .optional()
         .describe("Session in bundleId@port format. Auto-detected if omitted."),
     },
   },
-  async ({ target, session }) =>
-    withToolLogging("ui_dismiss", { target, session }, async () => {
+  async ({ oid, session }) =>
+    withToolLogging("ui_dismiss", { oid, session }, async () => {
       try {
-        const result = await uiDismiss({ target, session });
+        const result = await uiDismiss({ oid, session });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (e) {
         return { isError: true, content: [{ type: "text", text: String(e) }] };

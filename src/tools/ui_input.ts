@@ -1,13 +1,9 @@
 import { runCLI, resolveSession } from "../runner.js";
 import type { ExecFn } from "../runner.js";
-import { resolveActionLocator } from "./locator.js";
 
 export interface UIInputInput {
-  /**
-   * Plain locator string: visible text, accessibility identifier,
-   * class name, or numeric oid. Must resolve to a UITextField or UITextView.
-   */
-  target: string;
+  /** Executable node oid from ui_snapshot. Must resolve to a UITextField or UITextView. */
+  oid: string;
   /** Text to type into the field. */
   text: string;
   /** Viewglass session in bundleId@port format. Auto-detected if omitted. */
@@ -15,12 +11,8 @@ export interface UIInputInput {
 }
 
 export interface UIInputResult {
-  /** Original target locator. */
-  target: string;
-  /** Resolved executable target. */
-  resolvedTarget: string;
-  /** How the target was matched. */
-  matchedBy: string;
+  /** Executed target oid. */
+  oid: string;
   /** Text that was entered. */
   text: string;
   /** true on success. */
@@ -39,14 +31,14 @@ export async function uiInput(
   input: UIInputInput,
   exec?: ExecFn
 ): Promise<UIInputResult> {
+  if (!input.oid || String(input.oid).trim() === "") {
+    throw new Error("ui_input requires an exact oid from ui_snapshot. First inspect ui_snapshot.groups/nodes, then pass that oid to ui_input.");
+  }
   const session = await resolveSession(input.session, exec);
-  const resolved = await resolveActionLocator(input.target, session, "input", exec);
-  const cliArgs = ["input", resolved.resolvedTarget, "--text", input.text, "--json"];
+  const cliArgs = ["input", input.oid, "--text", input.text, "--json"];
   await runCLI(cliArgs, { session, exec });
   return {
-    target: input.target,
-    resolvedTarget: resolved.resolvedTarget,
-    matchedBy: resolved.matchedBy,
+    oid: input.oid,
     text: input.text,
     ok: true,
   };

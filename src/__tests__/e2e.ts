@@ -385,14 +385,14 @@ async function runE2E() {
     await new Promise((r) => setTimeout(r, 500));
 
     await test("scroll long_feed_scroll returns execution summary", async () => {
-      const data = await client.callToolJSON<{ ok?: boolean; locator?: string; direction?: string; distance?: number; resolvedTarget?: string }>(
-        "ui_scroll", { locator: "long_feed_scroll", direction: "down", distance: 200, session: SESSION }
+      const oid = await resolveTapOid(client, "long_feed_scroll");
+      const data = await client.callToolJSON<{ ok?: boolean; oid?: string; direction?: string; distance?: number }>(
+        "ui_scroll", { oid, direction: "down", distance: 200, session: SESSION }
       );
       if (!data.ok) throw new Error(`unexpected result: ${JSON.stringify(data)}`);
-      if (data.locator !== "long_feed_scroll") throw new Error(`unexpected locator: ${data.locator}`);
+      if (data.oid !== oid) throw new Error(`unexpected oid: ${data.oid}`);
       if (data.direction !== "down") throw new Error(`unexpected direction: ${data.direction}`);
       if (data.distance !== 200) throw new Error(`unexpected distance: ${data.distance}`);
-      if (!data.resolvedTarget) throw new Error("missing resolvedTarget");
     });
 
     // ─── ui_set_attr ────────────────────────────────────────────────────────
@@ -586,13 +586,13 @@ async function runE2E() {
     });
 
     await test("input text into primary_text_field returns execution summary", async () => {
-      const data = await client.callToolJSON<{ ok?: boolean; text?: string; resolvedTarget?: string; matchedBy?: string }>(
-        "ui_input", { target: "primary_text_field", text: "hello e2e", session: SESSION }
+      const oid = await resolveTapOid(client, "primary_text_field");
+      const data = await client.callToolJSON<{ ok?: boolean; text?: string; oid?: string }>(
+        "ui_input", { oid, text: "hello e2e", session: SESSION }
       );
       if (!data.ok) throw new Error("expected ok:true");
       if (data.text !== "hello e2e") throw new Error(`unexpected text: ${data.text}`);
-      if (!data.resolvedTarget) throw new Error("missing resolvedTarget");
-      if (!data.matchedBy) throw new Error("missing matchedBy");
+      if (data.oid !== oid) throw new Error(`unexpected oid: ${data.oid}`);
     });
 
     await test("back from forms screen", async () => {
@@ -637,12 +637,12 @@ async function runE2E() {
     });
 
     await test("dismiss UINavigationController returns execution summary", async () => {
-      const data = await client.callToolJSON<{ ok?: boolean; resolvedTarget?: string; matchedBy?: string }>(
-        "ui_dismiss", { target: "UINavigationController", session: SESSION }
+      const oid = await resolveFirstOidByClass(client, "UINavigationController");
+      const data = await client.callToolJSON<{ ok?: boolean; oid?: string }>(
+        "ui_dismiss", { oid, session: SESSION }
       );
       if (!data.ok) throw new Error(`expected ok:true, got ${JSON.stringify(data)}`);
-      if (!data.resolvedTarget) throw new Error("missing resolvedTarget");
-      if (!data.matchedBy) throw new Error("missing matchedBy");
+      if (data.oid !== oid) throw new Error(`unexpected oid: ${data.oid}`);
     });
 
     await test("modal gone after dismiss (home screen buttons visible)", async () => {

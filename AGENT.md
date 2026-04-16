@@ -28,8 +28,8 @@ Use these tools in this order unless the task is trivial and the target is alrea
    - Prefer `groups.items[].oid` and `nodes[].oid` / `actionTargetOid`.
    - Prefer user-visible labels over UIKit private class names.
    - Do not guess `UITabBar`, `UITabBarButton`, `UIButton`, or private wrapper classes unless the snapshot already proves they are the right target.
-3. `ui_tap`
-   - Pass only the exact `oid` you resolved from `ui_snapshot`.
+3. Execute using exact `oid`
+   - `ui_tap`, `ui_scroll`, `ui_input`, and `ui_dismiss` require the exact `oid` you resolved from `ui_snapshot`.
 4. `ui_wait` or another `ui_snapshot`
    - Use this to confirm navigation, modal transitions, and list updates.
 5. `ui_attr_get`
@@ -41,7 +41,7 @@ Avoid these anti-patterns:
 - taking screenshots before using the structured snapshot, unless the task is explicitly visual
 - inventing alternate locator DSL such as `@"..."` or private query syntax
 - guessing UIKit internal class names before reading the snapshot
-- passing guessed labels to `ui_tap` instead of first resolving an exact `oid`
+- passing guessed labels to execution tools instead of first resolving an exact `oid`
 
 If `ui_snapshot` is large, it is acceptable to parse the returned JSON programmatically. That is a valid agent strategy. The important constraint is to base decisions on the snapshot first, not on blind UIKit guesses.
 
