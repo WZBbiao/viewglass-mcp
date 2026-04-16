@@ -19,7 +19,6 @@ and verify the connection — no manual steps required.
 | Tool | Description |
 |---|---|
 | `ui_snapshot` | Capture an agent-first UI snapshot with summary, groups, searchable nodes, and optional rawTree. |
-| `ui_query` | Find nodes from one plain locator string: visible text, accessibility ID, class name, or numeric oid. |
 | `ui_attr_get` | Get runtime attributes of a node by OID. |
 | `ui_tap` | Tap a node from one plain locator string and return an execution summary. Supports UIControl, gesture-backed views, UITableViewCell, and UICollectionViewCell. |
 | `ui_scroll` | Scroll a scroll view from one plain locator string and return an execution summary. |
@@ -53,7 +52,7 @@ For page navigation, settings flows, tab switching, and custom UI:
 Avoid this pattern:
 
 - guessing `UITabBar`, `UITabBarButton`, `UIButton`, or private UIKit classes first
-- using `ui_query` as the first step to figure out what page is on screen
+- trying to infer the current page from repeated locator guesses instead of starting with `ui_snapshot`
 - taking a screenshot before checking the structured snapshot, unless the task is explicitly visual
 
 ## Requirements
@@ -151,7 +150,7 @@ src/
   runner.ts          # CLI runner, binary resolution, injectable ExecFn
   index.ts           # MCP Server — registers all 16 tools
   tools/
-    ui_snapshot.ts   ui_query.ts      ui_attr_get.ts
+    ui_snapshot.ts                    ui_attr_get.ts
     ui_tap.ts        ui_scroll.ts     ui_set_attr.ts
     ui_invoke.ts     ui_wait.ts       ui_assert.ts
     ui_scan.ts       ui_screenshot.ts ui_input.ts

@@ -3,7 +3,7 @@
  * Viewglass MCP Server
  *
  * Exposes 16 tools for AI agents to inspect and interact with iOS app UI at runtime:
- *   Read:        ui_scan, ui_snapshot, ui_query, ui_attr_get
+ *   Read:        ui_scan, ui_snapshot, ui_attr_get
  *   Write:       ui_set_attr, ui_invoke
  *   Interact:    ui_tap, ui_scroll, ui_swipe, ui_long_press, ui_input, ui_dismiss
  *   Assert/Wait: ui_assert, ui_wait
@@ -17,7 +17,6 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 
 import { uiSnapshot } from "./tools/ui_snapshot.js";
-import { uiQuery } from "./tools/ui_query.js";
 import { uiAttrGet } from "./tools/ui_attr_get.js";
 import { uiTap } from "./tools/ui_tap.js";
 import { uiScroll } from "./tools/ui_scroll.js";
@@ -90,7 +89,7 @@ server.registerTool(
       "and a flattened node index with searchableText and actionTargetOid fields so agents can " +
       "find targets without guessing UIKit class names. " +
       "Best practice: for any navigation or custom UI task, call ui_snapshot first to understand the current page, " +
-      "then use ui_tap/ui_query with a concrete visible label from the snapshot. " +
+      "then use ui_tap with a concrete visible label or oid from the snapshot. " +
       "Use filter to narrow to a specific class or locator. Set compact=false only when you also need rawTree.",
     inputSchema: {
       session: sessionSchema,
@@ -118,53 +117,6 @@ server.registerTool(
     })
 );
 
-// ─── ui_query ───────────────────────────────────────────────────────────────
-
-server.registerTool(
-  "ui_query",
-  {
-    description:
-      "Find UI nodes matching a locator. Returns an array of matching nodes with oid, " +
-      "className, frame, accessibilityIdentifier, and other properties. " +
-      "Pass one plain locator string only: visible text, accessibility identifier, class name, or numeric oid. " +
-      "MCP resolves it internally in a fixed order so agents do not need to guess query DSL. " +
-      "Best practice: use ui_query after ui_snapshot has confirmed the current page and likely target. " +
-      "Do not use ui_query as the first step to discover where you are in the app. " +
-      "Use the returned oid values with ui_attr_get, ui_set_attr, or for invoke calls. " +
-      "Do NOT use screenshot to find elements — use this tool instead.",
-    inputSchema: {
-      locator: z
-        .string()
-        .describe("Plain locator string: visible text, accessibility identifier, class name, or numeric oid."),
-      session: sessionSchema,
-    },
-    annotations: { readOnlyHint: true, idempotentHint: true },
-  },
-  async ({ locator, session }) =>
-    withToolLogging("ui_query", { locator, session }, async () => {
-      try {
-        const result = await uiQuery({ locator, session });
-        if (result.length === 0) {
-          return {
-            isError: true,
-            content: [
-              {
-                type: "text",
-                text:
-                  `ui_query: locator '${locator}' matched 0 nodes. ` +
-                  "Try a different visible text, accessibility identifier, class name, or oid. " +
-                  "Call ui_snapshot to inspect the current hierarchy.",
-              },
-            ],
-          };
-        }
-        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-      } catch (e) {
-        return { isError: true, content: [{ type: "text", text: String(e) }] };
-      }
-    })
-);
-
 // ─── ui_attr_get ─────────────────────────────────────────────────────────────
 
 server.registerTool(
@@ -172,11 +124,11 @@ server.registerTool(
   {
     description:
       "Get one or more runtime attributes of a UI node by OID. " +
-      "Returns a map of { attrKey: value }. Use ui_query to get the OID first. " +
+      "Returns a map of { attrKey: value }. Use ui_snapshot to get the OID first. " +
       "Common keys: frame, backgroundColor, alpha, hidden, text, font, " +
       "contentMode, accessibilityIdentifier, accessibilityLabel, cornerRadius.",
     inputSchema: {
-      oid: z.coerce.string().describe("Node OID from ui_query (number or string)."),
+      oid: z.coerce.string().describe("Node OID from ui_snapshot (number or string)."),
       attrs: z
         .array(z.string())
         .min(1)
@@ -271,11 +223,11 @@ server.registerTool(
       "to match design spec, then read back with ui_attr_get to verify. " +
       "WARNING: Changes are ephemeral and reset on app relaunch. " +
       "Accepts either a node OID or one plain locator string; prefer the plain locator in agent workflows. " +
-      "Navigation patterns (get controller OID from ui_query, then use viewglass invoke): " +
+      "Navigation patterns (get controller OID from ui_snapshot, then use viewglass invoke): " +
       "  pop: invoke <navController-oid> popViewControllerAnimated: true — " +
       "  dismiss modal: invoke <vc-oid> dismissViewControllerAnimated:completion: true nil",
     inputSchema: {
-      oid: z.coerce.string().optional().describe("Node OID from ui_query (number or string)."),
+      oid: z.coerce.string().optional().describe("Node OID from ui_snapshot (number or string)."),
       locator: z.string().optional().describe("Plain locator string to resolve at execution time (preferred)."),
       attr: z
         .string()

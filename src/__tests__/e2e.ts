@@ -188,38 +188,16 @@ async function runE2E() {
       }
     });
 
-    // ─── ui_query ───────────────────────────────────────────────────────────
-    console.log("\n[ ui_query ]");
-
-    await test("query UILabel returns array of nodes", async () => {
-      const nodes = await client.callToolJSON<unknown[]>("ui_query", { locator: "UILabel", session: SESSION });
-      if (!Array.isArray(nodes) || nodes.length === 0) throw new Error("expected non-empty array");
-    });
-
-    await test("query UITabBar supports fuzzy class matching", async () => {
-      const full = await client.callToolJSON<unknown[]>("ui_query", { locator: "UITabBar", session: SESSION });
-      const fuzzy = await client.callToolJSON<unknown[]>("ui_query", { locator: "TabBar", session: SESSION });
-      const lowercase = await client.callToolJSON<unknown[]>("ui_query", { locator: "tabbar", session: SESSION });
-      if (!Array.isArray(full) || full.length === 0) throw new Error("expected UITabBar query to match");
-      if (!Array.isArray(fuzzy) || fuzzy.length === 0) throw new Error("expected TabBar fuzzy query to match");
-      if (!Array.isArray(lowercase) || lowercase.length === 0) throw new Error("expected tabbar lowercase query to match");
-    });
-
-    await test("query missing locator returns isError=true", async () => {
-      const r = await client.callTool("ui_query", { locator: "__definitely_missing__", session: SESSION });
-      if (!r.isError) throw new Error("expected isError=true for missing locator");
-    });
-
     // ─── ui_attr_get ────────────────────────────────────────────────────────
     console.log("\n[ ui_attr_get ]");
 
     let testOid: string | undefined;
     await test("resolve UILabel OID for attr tests", async () => {
-      const nodes = await client.callToolJSON<Array<{ oid?: number | string }>>(
-        "ui_query", { locator: "UILabel", session: SESSION }
+      const snap = await client.callToolJSON<{ nodes?: Array<{ oid?: number | string; className?: string }> }>(
+        "ui_snapshot", { session: SESSION, filter: "UILabel" }
       );
-      // OIDs come as numbers from CLI — convert to string for MCP schema validation
-      testOid = String(nodes[0]?.oid);
+      const node = snap.nodes?.find((item) => item.oid !== undefined);
+      testOid = String(node?.oid);
       if (!testOid || testOid === "undefined") throw new Error("no OID found");
     });
 

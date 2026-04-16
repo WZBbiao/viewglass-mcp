@@ -6,7 +6,7 @@ Ask the user only when a decision cannot be inferred from the project files.
 ## What is Viewglass
 
 Viewglass is an iOS runtime UI inspector for AI agents.
-It gives you 16 MCP tools to read the view hierarchy, query nodes, tap, scroll,
+It gives you 15 MCP tools to read the view hierarchy, inspect nodes, tap, scroll,
 input text, invoke any ObjC method, assert state, and take screenshots — all
 against a live running iOS app.
 
@@ -35,7 +35,7 @@ Use these tools in this order unless the task is trivial and the target is alrea
 
 Avoid these anti-patterns:
 
-- starting with `ui_query` just to figure out which page is currently visible
+- starting with repeated locator guesses to figure out which page is currently visible
 - taking screenshots before using the structured snapshot, unless the task is explicitly visual
 - inventing alternate locator DSL such as `@"..."` or private query syntax
 - guessing UIKit internal class names before reading the snapshot
