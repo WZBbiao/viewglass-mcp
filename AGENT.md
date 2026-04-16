@@ -45,6 +45,33 @@ Avoid these anti-patterns:
 
 If `ui_snapshot` is large, it is acceptable to parse the returned JSON programmatically. That is a valid agent strategy. The important constraint is to base decisions on the snapshot first, not on blind UIKit guesses.
 
+## Local project experience memory
+
+For repeated tasks, maintain project-local experience in:
+
+- `.viewglassmcp/README.md`
+- `.viewglassmcp/recipes.yaml`
+
+Use this memory to speed up repeated navigation and target resolution.
+
+Rules:
+
+1. Create `.viewglassmcp/` in the current project if it does not exist and the task is likely to repeat.
+2. Read `.viewglassmcp/recipes.yaml` before repeating a known flow.
+3. After a reusable UI task succeeds on a live app, update or add a recipe.
+4. Do not store runtime `oid` as the durable identity of a target.
+5. Prefer multi-signal recipes:
+   - `controllerHints`
+   - `groupRole`
+   - `searchableTextAny`
+   - `accessibilityIdAny`
+   - `classHints`
+   - `areaHint`
+6. Every recipe must include `success` conditions.
+7. If a recipe fails repeatedly, revise or remove it.
+
+You may use the templates from this repository as the initial shape for `.viewglassmcp/`.
+
 ---
 
 ## Step 1 — Configure viewglass-mcp in the AI client

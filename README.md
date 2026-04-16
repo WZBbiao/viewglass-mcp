@@ -58,6 +58,31 @@ Avoid this pattern:
 - trying to infer the current page from repeated locator guesses instead of starting with `ui_snapshot`
 - taking a screenshot before checking the structured snapshot, unless the task is explicitly visual
 
+## Project-local experience memory
+
+For repeated flows, keep project-local experience under:
+
+- `.viewglassmcp/README.md`
+- `.viewglassmcp/recipes.yaml`
+
+These files are maintained by the agent after successful live runs.
+They should store reusable target-finding recipes, not fragile runtime `oid` values.
+
+Recommended recipe signals:
+
+- `controllerHints`
+- `groupRole`
+- `searchableTextAny`
+- `accessibilityIdAny`
+- `classHints`
+- `areaHint`
+- `success`
+
+Templates are included in this package under:
+
+- `templates/.viewglassmcp/README.md`
+- `templates/.viewglassmcp/recipes.yaml`
+
 ## Requirements
 
 - iOS app with [ViewglassServer](https://github.com/WZBbiao/ViewglassServer) running (simulator or device).

@@ -20,6 +20,7 @@
   "files": [
     "dist/",
     "bin/",
+    "templates/",
     ".viewglass-cli-version",
     ".viewglass-server-min-version"
   ],
