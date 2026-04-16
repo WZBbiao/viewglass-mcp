@@ -3,6 +3,8 @@
 You are an AI agent. Read this file and execute all steps autonomously.
 Ask the user only when a decision cannot be inferred from the project files.
 
+Important: if this project uses ViewglassMCP, prefer the installed ViewglassMCP skill over this raw file when it is available in the client skill directory.
+
 ## What is Viewglass
 
 Viewglass is an iOS runtime UI inspector for AI agents.
@@ -86,6 +88,16 @@ Use the templates in this repository as the content source when you create `.vie
 - `templates/.viewglassmcp/recipes.yaml`
 
 ---
+
+## Step 0 — Install the ViewglassMCP skill
+
+From the project root, run:
+
+```bash
+npx -y viewglass-mcp init --force
+```
+
+This installs the skill into supported client skill directories and updates `AGENTS.md` with a ViewglassMCP guidance line, following the same model as `xcodebuildmcp`.
 
 ## Step 1 — Configure viewglass-mcp in the AI client
 

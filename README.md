@@ -3,16 +3,19 @@
 MCP Server for [Viewglass](https://github.com/WZBbiao/viewglass) iOS UI inspection.
 Exposes 16 tools for AI agents — bundles the `viewglass` CLI binary, no separate install required.
 
-## For AI Agents
+## Install the Viewglass skill
 
-Give this link to any AI agent to set up the full stack autonomously:
+Like `xcodebuildmcp`, ViewglassMCP works best when its skill is installed into the AI client skill directory and the project `AGENTS.md` is updated.
 
+From the target project root, run:
+
+```bash
+npx -y viewglass-mcp init --force
 ```
-https://raw.githubusercontent.com/WZBbiao/viewglass-mcp/main/AGENT.md
-```
 
-The agent will configure the MCP client, add ViewglassServer to the iOS project,
-and verify the connection — no manual steps required.
+This installs the ViewglassMCP skill into detected client skill directories (for example `.claude/skills` and `.agents/skills`) and appends a guidance line to the project `AGENTS.md`.
+
+Then configure the MCP client and restart the client session.
 
 ## Tools
 
@@ -97,6 +100,8 @@ Agent-first rule:
 ## Usage
 
 ### Claude Desktop / any MCP client
+
+If you installed the package globally, `viewglass-mcp` starts the MCP server by default and also supports `viewglass-mcp init`.
 
 ```json
 {

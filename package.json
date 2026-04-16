@@ -6,7 +6,7 @@
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "viewglass-mcp": "dist/index.js"
+    "viewglass-mcp": "dist/cli.js"
   },
   "engines": {
     "node": ">=18"
@@ -20,6 +20,7 @@
   "files": [
     "dist/",
     "bin/",
+    "skills/",
     "templates/",
     ".viewglass-cli-version",
     ".viewglass-server-min-version"
