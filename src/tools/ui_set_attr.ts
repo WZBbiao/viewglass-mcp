@@ -3,7 +3,7 @@ import type { ExecFn } from "../runner.js";
 import { resolveUniqueNodeLocator } from "./locator.js";
 
 export interface UISetAttrInput {
-  /** Node OID obtained from ui_query. */
+  /** Node OID obtained from ui_snapshot. */
   oid?: string;
   /** Locator resolved by the CLI (preferred for stable E2E and agent flows). */
   locator?: string;

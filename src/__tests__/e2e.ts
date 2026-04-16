@@ -33,6 +33,31 @@ type ToolResult = {
   content: Array<{ type: string; text: string }>;
 };
 
+type SnapshotNode = {
+  oid?: number | string;
+  actionTargetOid?: number | string;
+  className?: string;
+  text?: string;
+  searchableText?: unknown[];
+  accessibilityIdentifier?: string | null;
+};
+
+type SnapshotGroupItem = {
+  oid?: number | string;
+  label?: string;
+  selected?: boolean;
+};
+
+type SnapshotGroup = {
+  role?: string;
+  items?: SnapshotGroupItem[];
+};
+
+type SnapshotResult = {
+  groups?: SnapshotGroup[];
+  nodes?: SnapshotNode[];
+};
+
 class MCPClient {
   private proc: ReturnType<typeof spawn>;
   private pendingCalls = new Map<number, (r: JsonRpcResponse) => void>();
@@ -126,13 +151,101 @@ async function test(label: string, fn: () => Promise<void>) {
   }
 }
 
+function normalize(value: unknown): string {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function asOid(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  const oid = String(value);
+  return oid.length > 0 && oid !== "undefined" ? oid : undefined;
+}
+
+function snapshotNodeTexts(node: SnapshotNode): string[] {
+  const values = new Set<string>();
+  if (node.text) values.add(node.text);
+  if (node.accessibilityIdentifier) values.add(node.accessibilityIdentifier);
+  for (const item of node.searchableText ?? []) {
+    if (typeof item === "string" && item.trim().length > 0) values.add(item);
+  }
+  return [...values];
+}
+
+async function loadSnapshot(
+  client: MCPClient,
+  filter?: string
+): Promise<SnapshotResult> {
+  return client.callToolJSON<SnapshotResult>("ui_snapshot", {
+    session: SESSION,
+    ...(filter ? { filter } : {}),
+  });
+}
+
+async function resolveTapOid(
+  client: MCPClient,
+  label: string,
+  filter?: string
+): Promise<string> {
+  const snapshot = await loadSnapshot(client, filter);
+  const wanted = normalize(label);
+
+  for (const group of snapshot.groups ?? []) {
+    for (const item of group.items ?? []) {
+      if (normalize(item.label) === wanted) {
+        const oid = asOid(item.oid);
+        if (oid) return oid;
+      }
+    }
+  }
+
+  for (const node of snapshot.nodes ?? []) {
+    const texts = snapshotNodeTexts(node);
+    if (texts.some((text) => normalize(text) === wanted)) {
+      const oid = asOid(node.actionTargetOid) ?? asOid(node.oid);
+      if (oid) return oid;
+    }
+  }
+
+  throw new Error(`could not resolve oid for '${label}'`);
+}
+
+async function resolveFirstOidByClass(
+  client: MCPClient,
+  className: string
+): Promise<string> {
+  const snapshot = await loadSnapshot(client, className);
+  for (const node of snapshot.nodes ?? []) {
+    const oid = asOid(node.actionTargetOid) ?? asOid(node.oid);
+    if (oid) return oid;
+  }
+  throw new Error(`could not resolve oid for class '${className}'`);
+}
+
 async function resetToHome(client: MCPClient): Promise<void> {
-  await client.callTool("ui_tap", { locator: "dismiss_modal", session: SESSION });
-  await new Promise((r) => setTimeout(r, 300));
-  await client.callTool("ui_tap", { locator: "_UIButtonBarButton", session: SESSION });
-  await new Promise((r) => setTimeout(r, 300));
-  await client.callTool("ui_tap", { locator: "switch_tab_home", session: SESSION });
-  await new Promise((r) => setTimeout(r, 400));
+  try {
+    const dismissOid = await resolveTapOid(client, "dismiss_modal");
+    await client.callTool("ui_tap", { oid: dismissOid, session: SESSION });
+    await new Promise((r) => setTimeout(r, 300));
+  } catch {
+    // modal not present
+  }
+  try {
+    const backOid = await resolveFirstOidByClass(client, "_UIButtonBarButton");
+    await client.callTool("ui_tap", { oid: backOid, session: SESSION });
+    await new Promise((r) => setTimeout(r, 300));
+  } catch {
+    // no back button on root
+  }
+  for (const label of ["switch_tab_home", "tab_home", "Home"]) {
+    try {
+      const homeOid = await resolveTapOid(client, label);
+      await client.callTool("ui_tap", { oid: homeOid, session: SESSION });
+      await new Promise((r) => setTimeout(r, 400));
+      break;
+    } catch {
+      // already on home or current screen does not expose this home switch
+    }
+  }
   await client.callToolJSON("ui_wait", {
     mode: "appears",
     locator: "push_buttons_screen",
@@ -223,30 +336,26 @@ async function runE2E() {
     await resetToHome(client);
 
     await test("tap push_buttons_screen returns execution summary", async () => {
-      const data = await client.callToolJSON<{ ok?: boolean; locator?: string; resolvedTarget?: string; matchedBy?: string }>(
-        "ui_tap", { locator: "push_buttons_screen", session: SESSION }
+      const oid = await resolveTapOid(client, "push_buttons_screen");
+      const data = await client.callToolJSON<{ ok?: boolean; oid?: string }>(
+        "ui_tap", { oid, session: SESSION }
       );
       if (!data.ok) throw new Error(`unexpected result: ${JSON.stringify(data)}`);
-      if (data.locator !== "push_buttons_screen") throw new Error(`unexpected locator: ${data.locator}`);
-      if (!data.resolvedTarget) throw new Error("missing resolvedTarget");
-      if (!data.matchedBy) throw new Error("missing matchedBy");
+      if (data.oid !== oid) throw new Error(`unexpected oid: ${data.oid}`);
     });
 
     await test("tap _UIButtonBarButton (back) returns execution summary", async () => {
-      const data = await client.callToolJSON<{ ok?: boolean; resolvedTarget?: string }>(
-        "ui_tap", { locator: "_UIButtonBarButton", session: SESSION }
+      const oid = await resolveFirstOidByClass(client, "_UIButtonBarButton");
+      const data = await client.callToolJSON<{ ok?: boolean; oid?: string }>(
+        "ui_tap", { oid, session: SESSION }
       );
-      if (!data.ok || !data.resolvedTarget) throw new Error(`unexpected result: ${JSON.stringify(data)}`);
+      if (!data.ok || data.oid !== oid) throw new Error(`unexpected result: ${JSON.stringify(data)}`);
     });
 
     await test("tap table cell label triggers UITableViewCell selection", async () => {
-      await client.callToolJSON("ui_tap", { locator: "push_selectable_surfaces_screen", session: SESSION });
-      await client.callToolJSON("ui_tap", { locator: "table_row_label_1", session: SESSION });
-      const nodes = await client.callToolJSON<Array<{ oid?: number | string }>>(
-        "ui_query", { locator: "selection_status", session: SESSION }
-      );
-      const oid = String(nodes[0]?.oid);
-      if (!oid || oid === "undefined") throw new Error("missing selection_status oid");
+      await client.callToolJSON("ui_tap", { oid: await resolveTapOid(client, "push_selectable_surfaces_screen"), session: SESSION });
+      await client.callToolJSON("ui_tap", { oid: await resolveTapOid(client, "table_row_label_1"), session: SESSION });
+      const oid = await resolveTapOid(client, "selection_status");
       const attrs = await client.callToolJSON<Record<string, unknown>>(
         "ui_attr_get", { oid, attrs: ["text", "displayText"], session: SESSION }
       );
@@ -257,12 +366,8 @@ async function runE2E() {
     });
 
     await test("tap collection cell label triggers UICollectionViewCell selection", async () => {
-      await client.callToolJSON("ui_tap", { locator: "collection_tile_label_2", session: SESSION });
-      const nodes = await client.callToolJSON<Array<{ oid?: number | string }>>(
-        "ui_query", { locator: "selection_status", session: SESSION }
-      );
-      const oid = String(nodes[0]?.oid);
-      if (!oid || oid === "undefined") throw new Error("missing selection_status oid");
+      await client.callToolJSON("ui_tap", { oid: await resolveTapOid(client, "collection_tile_label_2"), session: SESSION });
+      const oid = await resolveTapOid(client, "selection_status");
       const attrs = await client.callToolJSON<Record<string, unknown>>(
         "ui_attr_get", { oid, attrs: ["text", "displayText"], session: SESSION }
       );
@@ -270,13 +375,13 @@ async function runE2E() {
       if (text !== "Collection selected: Sunset") {
         throw new Error(`unexpected selection status after collection tap: ${text}`);
       }
-      await client.callToolJSON("ui_tap", { locator: "_UIButtonBarButton", session: SESSION });
+      await client.callToolJSON("ui_tap", { oid: await resolveFirstOidByClass(client, "_UIButtonBarButton"), session: SESSION });
     });
 
     // ─── ui_scroll ──────────────────────────────────────────────────────────
     console.log("\n[ ui_scroll ]");
     await resetToHome(client);
-    await client.callToolJSON("ui_tap", { locator: "switch_tab_feed", session: SESSION });
+    await client.callToolJSON("ui_tap", { oid: await resolveTapOid(client, "tab_feed"), session: SESSION });
     await new Promise((r) => setTimeout(r, 500));
 
     await test("scroll long_feed_scroll returns execution summary", async () => {
@@ -347,10 +452,7 @@ async function runE2E() {
 
     let labelOid: string | undefined;
     await test("resolve a UILabel OID for invoke tests", async () => {
-      const nodes = await client.callToolJSON<Array<{ oid?: number | string }>>(
-        "ui_query", { locator: "UILabel", session: SESSION }
-      );
-      labelOid = String(nodes[0]?.oid);
+      labelOid = await resolveFirstOidByClass(client, "UILabel");
       if (!labelOid || labelOid === "undefined") throw new Error("no UILabel found");
     });
 
@@ -461,11 +563,12 @@ async function runE2E() {
     });
 
     await test("node screenshot of push_buttons_screen returns path and locator", async () => {
+      const oid = await resolveTapOid(client, "push_buttons_screen");
       const data = await client.callToolJSON<{ path?: string; locator?: string }>(
-        "ui_screenshot", { locator: "push_buttons_screen", session: SESSION }
+        "ui_screenshot", { locator: oid, session: SESSION }
       );
       if (!data.path) throw new Error("missing path");
-      if (data.locator !== "push_buttons_screen") throw new Error(`unexpected locator: ${data.locator}`);
+      if (data.locator !== oid) throw new Error(`unexpected locator: ${data.locator}`);
     });
 
     // ─── ui_input (navigate to forms first) ────────────────────────────────
@@ -473,7 +576,7 @@ async function runE2E() {
     await resetToHome(client);
 
     await test("navigate to forms screen", async () => {
-      await client.callToolJSON("ui_tap", { locator: "push_forms_screen", session: SESSION });
+      await client.callToolJSON("ui_tap", { oid: await resolveTapOid(client, "push_forms_screen"), session: SESSION });
       await new Promise((r) => setTimeout(r, 500));
       // Verify we're on the forms screen
       const r = await client.callTool("ui_assert", {
@@ -493,14 +596,14 @@ async function runE2E() {
     });
 
     await test("back from forms screen", async () => {
-      await client.callToolJSON("ui_tap", { locator: "_UIButtonBarButton", session: SESSION });
+      await client.callToolJSON("ui_tap", { oid: await resolveFirstOidByClass(client, "_UIButtonBarButton"), session: SESSION });
       await new Promise((r) => setTimeout(r, 500));
     });
 
     // ─── ui_swipe ───────────────────────────────────────────────────────────
     console.log("\n[ ui_swipe ]");
     await resetToHome(client);
-    await client.callToolJSON("ui_tap", { locator: "switch_tab_feed", session: SESSION });
+    await client.callToolJSON("ui_tap", { oid: await resolveTapOid(client, "tab_feed"), session: SESSION });
     await new Promise((r) => setTimeout(r, 500));
 
     await test("swipe UIScrollView down returns ok:true with target/direction/distance", async () => {
@@ -524,7 +627,7 @@ async function runE2E() {
     await resetToHome(client);
 
     await test("tap show_home_sheet to present a modal sheet", async () => {
-      await client.callToolJSON("ui_tap", { locator: "show_home_sheet", session: SESSION });
+      await client.callToolJSON("ui_tap", { oid: await resolveTapOid(client, "show_home_sheet"), session: SESSION });
       await new Promise((r) => setTimeout(r, 500));
       // Modal is now presented; dismiss_modal button visible inside it
       const r = await client.callTool("ui_assert", {

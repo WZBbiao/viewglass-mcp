@@ -155,24 +155,23 @@ server.registerTool(
   "ui_tap",
   {
     description:
-      "Tap a UI element. Pass one plain locator string only: visible text, accessibility identifier, class name, or numeric oid. " +
-      "MCP resolves it internally and returns an execution summary only. " +
+      "Tap a UI element by oid only. " +
+      "First call ui_snapshot, inspect groups/nodes, then pass the exact oid here. " +
       "Supports semantic taps on UIControl, UITapGestureRecognizer-backed views, " +
       "UITableViewCell, and UICollectionViewCell, including nested labels inside a cell. " +
-      "Best practice: for tab bars, switchers, settings lists, or any custom navigation surface, call ui_snapshot first, " +
-      "then tap the exact visible label from the snapshot instead of guessing UIKit private class names. " +
-      "Returns { ok, locator, resolvedTarget, matchedBy }.",
+      "Returns { ok, oid }.",
     inputSchema: {
-      locator: z
+      oid: z
+        .coerce
         .string()
-        .describe("Plain locator string: visible text, accessibility identifier, class name, or numeric oid."),
+        .describe("Executable node oid from ui_snapshot."),
       session: sessionSchema,
     },
   },
-  async ({ locator, session }) =>
-    withToolLogging("ui_tap", { locator, session }, async () => {
+  async ({ oid, session }) =>
+    withToolLogging("ui_tap", { oid, session }, async () => {
       try {
-        const result = await uiTap({ locator, session });
+        const result = await uiTap({ oid, session });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (e) {
         return { isError: true, content: [{ type: "text", text: String(e) }] };

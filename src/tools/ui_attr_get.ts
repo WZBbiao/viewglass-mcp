@@ -2,7 +2,7 @@ import { runCLI, resolveSession, parseJSON } from "../runner.js";
 import type { ExecFn } from "../runner.js";
 
 export interface UIAttrGetInput {
-  /** Node OID obtained from ui_query. */
+  /** Node OID obtained from ui_snapshot. */
   oid: string;
   /**
    * Attribute keys to return (e.g. ["frame", "backgroundColor", "text"]).
@@ -17,7 +17,7 @@ export interface UIAttrGetInput {
 
 /**
  * Get attributes of a UI node by OID.
- * Returns a map of { attrKey: value }. Use ui_query first to get the OID.
+ * Returns a map of { attrKey: value }. Use ui_snapshot first to get the OID.
  */
 export async function uiAttrGet(
   input: UIAttrGetInput,
