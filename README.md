@@ -83,6 +83,12 @@ Templates are included in this package under:
 - `templates/.viewglassmcp/README.md`
 - `templates/.viewglassmcp/recipes.yaml`
 
+To copy them into a project:
+
+```bash
+npm run init:memory -- /path/to/project
+```
+
 ## Requirements
 
 - iOS app with [ViewglassServer](https://github.com/WZBbiao/ViewglassServer) running (simulator or device).
@@ -158,6 +164,16 @@ Optional flags:
 - `-- --all-runs`: export every detected run in the log file
 - `-- --include-screenshots`: keep screenshot steps in the draft
 - `-- --gap-ms 120000`: change the run split threshold
+
+Initialize project-local experience memory in a target project:
+
+```bash
+npm run init:memory -- /path/to/project
+```
+
+Optional flag:
+
+- `-- --force`: overwrite existing `.viewglassmcp` template files
 
 When session logging is enabled, each line includes `session=<bundleId@port>` when the tool/CLI call has one.  
 With file splitting enabled, examples look like:

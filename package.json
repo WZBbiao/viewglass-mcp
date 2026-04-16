@@ -30,7 +30,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npm run build && npx tsx src/__tests__/e2e.ts",
-    "export:flow": "node scripts/export-flow-from-log.mjs"
+    "export:flow": "node scripts/export-flow-from-log.mjs",
+    "init:memory": "node scripts/init-project-memory.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1"

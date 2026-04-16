@@ -72,6 +72,14 @@ Rules:
 
 You may use the templates from this repository as the initial shape for `.viewglassmcp/`.
 
+Bootstrap command:
+
+```bash
+npm run init:memory -- /path/to/project
+```
+
+Use `-- --force` only when you intentionally want to replace existing template files.
+
 ---
 
 ## Step 1 — Configure viewglass-mcp in the AI client
