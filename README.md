@@ -83,11 +83,11 @@ Templates are included in this package under:
 - `templates/.viewglassmcp/README.md`
 - `templates/.viewglassmcp/recipes.yaml`
 
-To copy them into a project:
+Agent-first rule:
 
-```bash
-npm run init:memory -- /path/to/project
-```
+- the agent should create `.viewglassmcp/` automatically inside the current project when a task is likely to repeat
+- after a reusable live task succeeds, the agent should update `.viewglassmcp/recipes.yaml` in the same session
+- on later runs, the agent should consult `.viewglassmcp/recipes.yaml` before fallback exploration
 
 ## Requirements
 
@@ -166,14 +166,7 @@ Optional flags:
 - `-- --gap-ms 120000`: change the run split threshold
 
 Initialize project-local experience memory in a target project:
-
-```bash
-npm run init:memory -- /path/to/project
-```
-
-Optional flag:
-
-- `-- --force`: overwrite existing `.viewglassmcp` template files
+There is no required bootstrap command. The agent should create and maintain `.viewglassmcp/` automatically.
 
 When session logging is enabled, each line includes `session=<bundleId@port>` when the tool/CLI call has one.  
 With file splitting enabled, examples look like:

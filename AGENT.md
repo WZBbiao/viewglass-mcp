@@ -56,29 +56,34 @@ Use this memory to speed up repeated navigation and target resolution.
 
 Rules:
 
-1. Create `.viewglassmcp/` in the current project if it does not exist and the task is likely to repeat.
-2. Read `.viewglassmcp/recipes.yaml` before repeating a known flow.
-3. After a reusable UI task succeeds on a live app, update or add a recipe.
-4. Do not store runtime `oid` as the durable identity of a target.
-5. Prefer multi-signal recipes:
+1. If the task is likely to repeat and `.viewglassmcp/` does not exist in the current project, create it automatically.
+2. Create these files automatically when needed:
+   - `.viewglassmcp/README.md`
+   - `.viewglassmcp/recipes.yaml`
+3. Read `.viewglassmcp/recipes.yaml` before repeating a known flow.
+4. After a reusable UI task succeeds on a live app, update or add a recipe in `.viewglassmcp/recipes.yaml` during the same session.
+5. Do not store runtime `oid` as the durable identity of a target.
+6. Prefer multi-signal recipes:
    - `controllerHints`
    - `groupRole`
    - `searchableTextAny`
    - `accessibilityIdAny`
    - `classHints`
    - `areaHint`
-6. Every recipe must include `success` conditions.
-7. If a recipe fails repeatedly, revise or remove it.
+7. Every recipe must include `success` conditions.
+8. If a recipe fails repeatedly, revise or remove it.
 
-You may use the templates from this repository as the initial shape for `.viewglassmcp/`.
+Default experience loop:
 
-Bootstrap command:
+1. Check `.viewglassmcp/recipes.yaml` first when the task resembles a previous flow.
+2. If no usable recipe exists, use `ui_snapshot` and complete the task normally.
+3. If the task succeeds and is likely to repeat, update `.viewglassmcp/recipes.yaml` immediately.
+4. On later runs, prefer the project-local recipe before fallback exploration.
 
-```bash
-npm run init:memory -- /path/to/project
-```
+Use the templates in this repository as the content source when you create `.viewglassmcp/`:
 
-Use `-- --force` only when you intentionally want to replace existing template files.
+- `templates/.viewglassmcp/README.md`
+- `templates/.viewglassmcp/recipes.yaml`
 
 ---
 
