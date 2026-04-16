@@ -349,40 +349,45 @@ function sortNodes(a: UISnapshotNode, b: UISnapshotNode): number {
 }
 
 function resolveActionTargetOid(node: RawNode, nodesByOid: Map<number, RawNode>): number {
-  let current = node;
+  let best = node;
+  let probe = node;
   let steps = 0;
 
-  while (steps < 5 && current.parentOid) {
-    const parent = nodesByOid.get(current.parentOid);
+  while (steps < 6 && probe.parentOid) {
+    const parent = nodesByOid.get(probe.parentOid);
     if (!parent) break;
-    if (!parent.isUserInteractionEnabled) break;
     if ((parent.isHidden ?? false) || (parent.alpha ?? 1) <= 0) break;
 
-    if (shouldPreferAncestorAsActionTarget(current, parent)) {
-      current = parent;
-      steps += 1;
-      continue;
+    if (shouldPreferAncestorAsActionTarget(best, parent)) {
+      best = parent;
     }
-    break;
+    probe = parent;
+    steps += 1;
   }
 
-  return current.primaryOid ?? current.oid;
+  return best.primaryOid ?? best.oid;
 }
 
-function shouldPreferAncestorAsActionTarget(node: RawNode, parent: RawNode): boolean {
-  const nodeClass = node.className;
-  const parentClass = parent.className;
-  const nodeArea = Math.max(1, node.frame.width * node.frame.height);
-  const parentArea = Math.max(1, parent.frame.width * parent.frame.height);
-  const nodeIsLeafLike = /Label|ImageView|ButtonLabel/i.test(nodeClass);
+function shouldPreferAncestorAsActionTarget(best: RawNode, ancestor: RawNode): boolean {
+  const bestClass = best.className;
+  const ancestorClass = ancestor.className;
+  const bestArea = Math.max(1, best.frame.width * best.frame.height);
+  const ancestorArea = Math.max(1, ancestor.frame.width * ancestor.frame.height);
+  const bestIsLeafLike = /Label|ImageView|ButtonLabel/i.test(bestClass);
+  const ancestorLooksActionable =
+    Boolean(ancestor.isUserInteractionEnabled) ||
+    /Button|Cell|Tab|Segment|Control/i.test(ancestorClass);
 
-  if (nodeIsLeafLike && parentArea >= nodeArea * 1.2) {
+  if (!ancestorLooksActionable) {
+    return false;
+  }
+  if (bestIsLeafLike && ancestorArea >= bestArea * 1.2) {
     return true;
   }
-  if (/UIButton/i.test(parentClass) || /Cell/i.test(parentClass)) {
+  if (/UIButton|Cell/i.test(ancestorClass)) {
     return true;
   }
-  if (nodeIsLeafLike && /Tab|Segment|Control/i.test(parentClass) && parentArea >= nodeArea) {
+  if (bestIsLeafLike && /Tab|Segment|Control/i.test(ancestorClass) && ancestorArea >= bestArea) {
     return true;
   }
   return false;
@@ -405,14 +410,28 @@ function buildSwitcherGroups(
         texts.accessibilityLabel,
       ]).length > 0;
       const visible = (node.isHidden ?? false) === false && (node.alpha ?? 1) > 0 && node.frame.width > 0 && node.frame.height > 0;
-      return hasText && visible && Boolean(node.isUserInteractionEnabled);
+      if (!hasText || !visible) return false;
+      const actionOid = actionTargetByOid.get(node.oid) ?? node.primaryOid ?? node.oid;
+      const actionTarget = nodesByOid.get(actionOid) ?? node;
+      const actionTargetVisible =
+        (actionTarget.isHidden ?? false) === false &&
+        (actionTarget.alpha ?? 1) > 0 &&
+        actionTarget.frame.width > 0 &&
+        actionTarget.frame.height > 0;
+      const actionTargetActionable =
+        Boolean(actionTarget.isUserInteractionEnabled) ||
+        /Button|Cell|Tab|Segment|Control/i.test(actionTarget.className);
+      return actionTargetVisible && actionTargetActionable;
     })
     .map((node) => {
       const actionOid = actionTargetByOid.get(node.oid) ?? node.primaryOid ?? node.oid;
       return {
         source: node,
         target: nodesByOid.get(actionOid) ?? node,
-        texts: dedupeStrings(Object.values(extractTextSources(node))),
+        texts: dedupeStrings([
+          ...Object.values(extractTextSources(node)),
+          ...Object.values(extractTextSources(nodesByOid.get(actionOid) ?? node)),
+        ]),
       };
     });
 

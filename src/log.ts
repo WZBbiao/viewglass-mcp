@@ -16,6 +16,11 @@ const TOOL_LOG_ENABLED =
   process.env.VIEWGLASS_MCP_LOG === "true" ||
   process.env.VIEWGLASS_MCP_LOG_TOOL === "1";
 
+const RESOLVE_LOG_ENABLED =
+  process.env.VIEWGLASS_MCP_LOG === "1" ||
+  process.env.VIEWGLASS_MCP_LOG === "true" ||
+  process.env.VIEWGLASS_MCP_LOG_RESOLVE === "1";
+
 const LOG_FILE = process.env.VIEWGLASS_MCP_LOG_FILE;
 const SPLIT_BY_SESSION =
   process.env.VIEWGLASS_MCP_LOG_SPLIT_BY_SESSION === "1" ||
@@ -127,4 +132,17 @@ export function logToolThrow(name: string, error: unknown, durationMs: number, s
 
 export function mcpLoggingEnabled(): boolean {
   return LOG_ENABLED;
+}
+
+export function logResolveDecision(
+  session: string | undefined,
+  phase: string,
+  locator: string,
+  details: unknown
+) {
+  if (!RESOLVE_LOG_ENABLED) return;
+  writeLine(
+    `[resolve]${session ? ` session=${session}` : ""} phase=${phase} locator=${JSON.stringify(locator)} details=${safeStringify(details, 800)}`,
+    session
+  );
 }

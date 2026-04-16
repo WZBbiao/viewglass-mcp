@@ -179,6 +179,67 @@ const hierarchyFixture = {
                 },
               ],
             },
+            {
+              node: {
+                oid: 230,
+                primaryOid: 230,
+                oidType: "view",
+                className: "_UITabButton",
+                frame: { x: 280, y: 770, width: 80, height: 58 },
+                bounds: { x: 0, y: 0, width: 80, height: 58 },
+                isHidden: false,
+                alpha: 1,
+                isUserInteractionEnabled: true,
+                childrenOids: [231],
+                parentOid: 200,
+                attributeGroups: [],
+              },
+              children: [
+                {
+                  node: {
+                    oid: 231,
+                    primaryOid: 231,
+                    oidType: "view",
+                    className: "UIView",
+                    frame: { x: 288, y: 782, width: 64, height: 34 },
+                    bounds: { x: 0, y: 0, width: 64, height: 34 },
+                    isHidden: false,
+                    alpha: 1,
+                    isUserInteractionEnabled: false,
+                    childrenOids: [232],
+                    parentOid: 230,
+                    attributeGroups: [],
+                  },
+                  children: [
+                    {
+                      node: {
+                        oid: 232,
+                        primaryOid: 232,
+                        oidType: "view",
+                        className: "UILabel",
+                        frame: { x: 300, y: 805, width: 20, height: 12 },
+                        bounds: { x: 0, y: 0, width: 20, height: 12 },
+                        isHidden: false,
+                        alpha: 1,
+                        isUserInteractionEnabled: true,
+                        childrenOids: [],
+                        parentOid: 231,
+                        customDisplayTitle: "Me",
+                        attributeGroups: [
+                          {
+                            groupName: "viewglass_runtime",
+                            attributes: [
+                              { displayName: "displayText", value: { string: { _0: "Me" } } },
+                            ],
+                          },
+                        ],
+                      },
+                      children: [],
+                    },
+                  ],
+                },
+              ],
+            },
           ],
         },
       ],
@@ -223,15 +284,21 @@ describe("uiSnapshot", () => {
     expect(result.snapshot.snapshotId).toBe("snap-1");
     expect(result.summary.visibleText).toContain("遊戲");
     expect(result.summary.visibleText).toContain("排行榜");
+    expect(result.summary.visibleText).toContain("Me");
     expect(result.groups).toHaveLength(1);
     expect(result.groups[0]?.role).toBe("bottomNavigation");
-    expect(result.groups[0]?.itemLabels).toEqual(["遊戲", "排行榜"]);
+    expect(result.groups[0]?.itemLabels).toEqual(["遊戲", "排行榜", "Me"]);
 
     const gameLabel = result.nodes.find((node) => node.oid === 211);
     expect(gameLabel?.text).toBe("遊戲");
     expect(gameLabel?.actionTargetOid).toBe(210);
     expect(gameLabel?.groupId).toBe("group_bottom_1");
     expect(gameLabel?.searchableText).toContain("遊戲");
+
+    const meLabel = result.nodes.find((node) => node.oid === 232);
+    expect(meLabel?.text).toBe("Me");
+    expect(meLabel?.actionTargetOid).toBe(230);
+    expect(meLabel?.groupId).toBe("group_bottom_1");
   });
 
   it("omits rawTree by default", async () => {

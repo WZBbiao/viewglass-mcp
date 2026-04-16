@@ -1,6 +1,7 @@
 import { runCLI, parseJSON } from "../runner.js";
 import type { ExecFn } from "../runner.js";
 import { uiSnapshot } from "./ui_snapshot.js";
+import { logResolveDecision } from "../log.js";
 
 type QueryLikeNode = {
   oid?: number | string;
@@ -95,6 +96,10 @@ export async function uiQueryWithPlainLocator(
 ): Promise<QueryLikeNode[]> {
   for (const expression of buildQueryExpressions(raw)) {
     const nodes = await runQueryExpression(expression, session, exec);
+    logResolveDecision(session, "query", raw, {
+      expression,
+      candidateCount: nodes.length,
+    });
     if (nodes.length > 0) return nodes;
   }
   return [];
@@ -188,6 +193,14 @@ export async function resolveQueryLocatorExpression(
     snapshot.nodes
   );
   const { exact: exactGroupLabels, contains: containsGroupLabels } = classifyGroups(value, snapshot.groups);
+  logResolveDecision(session, "resolveQueryLocatorExpression", value, {
+    exactAccessibility: exactAccessibility.length,
+    exactGroupLabels: exactGroupLabels.length,
+    containsGroupLabels: containsGroupLabels.length,
+    exactText: exactText.length,
+    containsText: containsText.length,
+    classMatches: classMatches.length,
+  });
 
   if (exactAccessibility.length > 0) {
     return { input: value, queryExpression: `#${value}`, matchedBy: "accessibilityIdentifier" };
@@ -233,6 +246,15 @@ export async function resolveUniqueNodeLocator(
     snapshot.nodes
   );
   const { exact: exactGroupLabels, contains: containsGroupLabels } = classifyGroups(value, snapshot.groups);
+  logResolveDecision(session, "resolveUniqueNodeLocator", value, {
+    exactAccessibility: exactAccessibility.length,
+    exactGroupLabels: exactGroupLabels.length,
+    containsGroupLabels: containsGroupLabels.length,
+    exactText: exactText.length,
+    containsText: containsText.length,
+    classMatches: classMatches.length,
+    groupCount: snapshot.groups.length,
+  });
 
   const chooseUnique = (
     candidates: SnapshotLikeNode[],
@@ -291,6 +313,9 @@ export async function resolveUniqueNodeLocator(
   }
 
   if (fallbackResolvedTargets.length > 1) {
+    logResolveDecision(session, "resolveUniqueNodeLocator.multiple", value, {
+      fallbackResolvedTargets,
+    });
     throw new Error(
       `Locator '${value}' matched ${fallbackResolvedTargets.length} targets. Refine the plain text label or accessibility identifier.`
     );
@@ -326,6 +351,17 @@ export async function resolveActionLocator(
   );
   const actionGroups = snapshot.groups.filter((group) => group.role === "bottomNavigation" || group.role === "topSwitcher");
   const { exact: exactGroupLabels, contains: containsGroupLabels } = classifyGroups(value, actionGroups);
+  logResolveDecision(session, "resolveActionLocator", value, {
+    action,
+    actionNodeCount: actionNodes.length,
+    actionGroupCount: actionGroups.length,
+    exactAccessibility: exactAccessibility.length,
+    exactGroupLabels: exactGroupLabels.length,
+    containsGroupLabels: containsGroupLabels.length,
+    exactText: exactText.length,
+    containsText: containsText.length,
+    classMatches: classMatches.length,
+  });
   const exactAccessibilityResolved = uniqueResolvedTarget(exactAccessibility, value, "accessibilityIdentifier");
   if (exactAccessibilityResolved) return exactAccessibilityResolved;
 
@@ -371,6 +407,9 @@ export async function resolveActionLocator(
   }
 
   if (fallbackResolvedTargets.length > 1) {
+    logResolveDecision(session, "resolveActionLocator.multiple", value, {
+      fallbackResolvedTargets,
+    });
     throw new Error(
       `Locator '${value}' matched ${fallbackResolvedTargets.length} targets. Refine the plain text label or accessibility identifier.`
     );
