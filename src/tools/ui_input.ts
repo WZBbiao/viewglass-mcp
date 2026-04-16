@@ -1,6 +1,5 @@
 import { runCLI, resolveSession } from "../runner.js";
 import type { ExecFn } from "../runner.js";
-import { uiSnapshot } from "./ui_snapshot.js";
 import { resolveActionLocator } from "./locator.js";
 
 export interface UIInputInput {
@@ -26,14 +25,6 @@ export interface UIInputResult {
   text: string;
   /** true on success. */
   ok: true;
-  /** Lightweight post-action summary so the agent can confirm the screen changed. */
-  postState: {
-    snapshotId: string;
-    visibleText: string[];
-    controllerHints: string[];
-    bottomBarCandidates: unknown[];
-    groupCount: number;
-  };
 }
 
 /**
@@ -42,7 +33,7 @@ export interface UIInputResult {
  * Dispatches the text semantically via the text field's input mechanism.
  * Clears existing text if any, then types the new text.
  *
- * Returns { target, resolvedTarget, matchedBy, text, ok: true, postState } on success.
+ * Returns { target, resolvedTarget, matchedBy, text, ok: true } on success.
  */
 export async function uiInput(
   input: UIInputInput,
@@ -52,20 +43,11 @@ export async function uiInput(
   const resolved = await resolveActionLocator(input.target, session, "input", exec);
   const cliArgs = ["input", resolved.resolvedTarget, "--text", input.text, "--json"];
   await runCLI(cliArgs, { session, exec });
-  await runCLI(["refresh"], { session, exec });
-  const snapshot = await uiSnapshot({ session, compact: true }, exec);
   return {
     target: input.target,
     resolvedTarget: resolved.resolvedTarget,
     matchedBy: resolved.matchedBy,
     text: input.text,
     ok: true,
-    postState: {
-      snapshotId: snapshot.snapshot.snapshotId,
-      visibleText: snapshot.summary.visibleText.slice(0, 12),
-      controllerHints: snapshot.summary.controllerHints.slice(0, 4),
-      bottomBarCandidates: snapshot.summary.bottomBarCandidates,
-      groupCount: snapshot.summary.groupCount,
-    },
   };
 }

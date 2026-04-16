@@ -47,7 +47,7 @@ describe("uiScroll", () => {
     expect(scrollCall[1]).toContain("--animated");
   });
 
-  it("returns lightweight post-action state", async () => {
+  it("returns execution summary only", async () => {
     const exec = makeExec();
     const result = await uiScroll({ locator: "feed", direction: "down", session: "com.test@1234" }, exec);
     expect(result.ok).toBe(true);
@@ -55,6 +55,5 @@ describe("uiScroll", () => {
     expect(result.resolvedTarget).toBe("88");
     expect(result.direction).toBe("down");
     expect(result.distance).toBe(300);
-    expect(result.postState.snapshotId).toBe("snap-scroll");
   });
 });

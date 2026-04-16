@@ -33,6 +33,13 @@ export interface ResolvedQueryLocator {
   matchedBy: string;
 }
 
+type SnapshotGroupLike = {
+  id: string;
+  role: "bottomNavigation" | "topSwitcher";
+  itemOids: number[];
+  itemLabels: string[];
+};
+
 function escapeContains(term: string): string {
   return term.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
@@ -68,7 +75,7 @@ export function buildQueryExpressions(raw: string): string[] {
 
   if (/^\d+$/.test(value)) return [value];
 
-  return [`#${value}`, value, `contains:"${escapeContains(value)}"`];
+  return [`#${value}`, `contains:"${escapeContains(value)}"`, value];
 }
 
 async function runQueryExpression(
@@ -139,6 +146,25 @@ function classifySnapshotNodes(raw: string, nodes: SnapshotLikeNode[]) {
   };
 }
 
+function classifyGroups(raw: string, groups: SnapshotGroupLike[]) {
+  const lower = raw.toLocaleLowerCase();
+  const exact = groups.flatMap((group) =>
+    group.itemLabels.flatMap((label, index) =>
+      label.toLocaleLowerCase() === lower
+        ? [{ group, itemOid: group.itemOids[index], label }]
+        : []
+    )
+  );
+  const contains = groups.flatMap((group) =>
+    group.itemLabels.flatMap((label, index) =>
+      label.toLocaleLowerCase().includes(lower)
+        ? [{ group, itemOid: group.itemOids[index], label }]
+        : []
+    )
+  );
+  return { exact, contains };
+}
+
 export async function resolveQueryLocatorExpression(
   raw: string,
   session: string,
@@ -161,9 +187,13 @@ export async function resolveQueryLocatorExpression(
     value,
     snapshot.nodes
   );
+  const { exact: exactGroupLabels, contains: containsGroupLabels } = classifyGroups(value, snapshot.groups);
 
   if (exactAccessibility.length > 0) {
     return { input: value, queryExpression: `#${value}`, matchedBy: "accessibilityIdentifier" };
+  }
+  if (exactGroupLabels.length > 0 || containsGroupLabels.length > 0) {
+    return { input: value, queryExpression: `contains:"${escapeContains(value)}"`, matchedBy: "group label" };
   }
   if (exactText.length > 0 || containsText.length > 0) {
     return { input: value, queryExpression: `contains:"${escapeContains(value)}"`, matchedBy: "visible text" };
@@ -202,6 +232,7 @@ export async function resolveUniqueNodeLocator(
     value,
     snapshot.nodes
   );
+  const { exact: exactGroupLabels, contains: containsGroupLabels } = classifyGroups(value, snapshot.groups);
 
   const chooseUnique = (
     candidates: SnapshotLikeNode[],
@@ -219,6 +250,18 @@ export async function resolveUniqueNodeLocator(
 
   const exactAccessibilityResolved = chooseUnique(exactAccessibility, "accessibilityIdentifier");
   if (exactAccessibilityResolved) return exactAccessibilityResolved;
+
+  const exactGroupResolved = chooseUnique(
+    exactGroupLabels.map((match) => ({ primaryOid: match.itemOid, actionTargetOid: match.itemOid } as SnapshotLikeNode)),
+    "group label"
+  );
+  if (exactGroupResolved) return exactGroupResolved;
+
+  const containsGroupResolved = chooseUnique(
+    containsGroupLabels.map((match) => ({ primaryOid: match.itemOid, actionTargetOid: match.itemOid } as SnapshotLikeNode)),
+    "group label contains"
+  );
+  if (containsGroupResolved) return containsGroupResolved;
 
   const exactTextResolved = chooseUnique(exactText, "visible text");
   if (exactTextResolved) return exactTextResolved;
@@ -281,14 +324,24 @@ export async function resolveActionLocator(
     value,
     actionNodes
   );
+  const actionGroups = snapshot.groups.filter((group) => group.role === "bottomNavigation" || group.role === "topSwitcher");
+  const { exact: exactGroupLabels, contains: containsGroupLabels } = classifyGroups(value, actionGroups);
   const exactAccessibilityResolved = uniqueResolvedTarget(exactAccessibility, value, "accessibilityIdentifier");
   if (exactAccessibilityResolved) return exactAccessibilityResolved;
 
-  const exactGroupLabel = actionNodes.filter(
-    (node) => node.groupId && node.text?.toLocaleLowerCase() === value.toLocaleLowerCase()
+  const exactGroupLabelResolved = uniqueResolvedTarget(
+    exactGroupLabels.map((match) => ({ actionTargetOid: match.itemOid })),
+    value,
+    "group label"
   );
-  const exactGroupLabelResolved = uniqueResolvedTarget(exactGroupLabel, value, "group label");
   if (exactGroupLabelResolved) return exactGroupLabelResolved;
+
+  const containsGroupLabelResolved = uniqueResolvedTarget(
+    containsGroupLabels.map((match) => ({ actionTargetOid: match.itemOid })),
+    value,
+    "group label contains"
+  );
+  if (containsGroupLabelResolved) return containsGroupLabelResolved;
 
   const exactTextResolved = uniqueResolvedTarget(exactText, value, "visible text");
   if (exactTextResolved) return exactTextResolved;

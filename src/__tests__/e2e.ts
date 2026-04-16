@@ -244,21 +244,21 @@ async function runE2E() {
     console.log("\n[ ui_tap ]");
     await resetToHome(client);
 
-    await test("tap push_buttons_screen returns lightweight postState", async () => {
-      const data = await client.callToolJSON<{ ok?: boolean; locator?: string; resolvedTarget?: string; postState?: { snapshotId?: string } }>(
+    await test("tap push_buttons_screen returns execution summary", async () => {
+      const data = await client.callToolJSON<{ ok?: boolean; locator?: string; resolvedTarget?: string; matchedBy?: string }>(
         "ui_tap", { locator: "push_buttons_screen", session: SESSION }
       );
       if (!data.ok) throw new Error(`unexpected result: ${JSON.stringify(data)}`);
       if (data.locator !== "push_buttons_screen") throw new Error(`unexpected locator: ${data.locator}`);
       if (!data.resolvedTarget) throw new Error("missing resolvedTarget");
-      if (!data.postState?.snapshotId) throw new Error("missing postState");
+      if (!data.matchedBy) throw new Error("missing matchedBy");
     });
 
-    await test("tap _UIButtonBarButton (back) returns lightweight postState", async () => {
-      const data = await client.callToolJSON<{ postState?: { snapshotId?: string } }>(
+    await test("tap _UIButtonBarButton (back) returns execution summary", async () => {
+      const data = await client.callToolJSON<{ ok?: boolean; resolvedTarget?: string }>(
         "ui_tap", { locator: "_UIButtonBarButton", session: SESSION }
       );
-      if (!data.postState?.snapshotId) throw new Error("missing postState");
+      if (!data.ok || !data.resolvedTarget) throw new Error(`unexpected result: ${JSON.stringify(data)}`);
     });
 
     await test("tap table cell label triggers UITableViewCell selection", async () => {
@@ -301,15 +301,15 @@ async function runE2E() {
     await client.callToolJSON("ui_tap", { locator: "switch_tab_feed", session: SESSION });
     await new Promise((r) => setTimeout(r, 500));
 
-    await test("scroll long_feed_scroll returns lightweight postState", async () => {
-      const data = await client.callToolJSON<{ ok?: boolean; locator?: string; direction?: string; distance?: number; postState?: { snapshotId?: string } }>(
+    await test("scroll long_feed_scroll returns execution summary", async () => {
+      const data = await client.callToolJSON<{ ok?: boolean; locator?: string; direction?: string; distance?: number; resolvedTarget?: string }>(
         "ui_scroll", { locator: "long_feed_scroll", direction: "down", distance: 200, session: SESSION }
       );
       if (!data.ok) throw new Error(`unexpected result: ${JSON.stringify(data)}`);
       if (data.locator !== "long_feed_scroll") throw new Error(`unexpected locator: ${data.locator}`);
       if (data.direction !== "down") throw new Error(`unexpected direction: ${data.direction}`);
       if (data.distance !== 200) throw new Error(`unexpected distance: ${data.distance}`);
-      if (!data.postState?.snapshotId) throw new Error("missing postState");
+      if (!data.resolvedTarget) throw new Error("missing resolvedTarget");
     });
 
     // ─── ui_set_attr ────────────────────────────────────────────────────────
@@ -504,14 +504,14 @@ async function runE2E() {
       if (r.isError) throw new Error("forms screen did not appear");
     });
 
-    await test("input text into primary_text_field returns lightweight postState", async () => {
-      const data = await client.callToolJSON<{ ok?: boolean; text?: string; resolvedTarget?: string; postState?: { snapshotId?: string } }>(
+    await test("input text into primary_text_field returns execution summary", async () => {
+      const data = await client.callToolJSON<{ ok?: boolean; text?: string; resolvedTarget?: string; matchedBy?: string }>(
         "ui_input", { target: "primary_text_field", text: "hello e2e", session: SESSION }
       );
       if (!data.ok) throw new Error("expected ok:true");
       if (data.text !== "hello e2e") throw new Error(`unexpected text: ${data.text}`);
       if (!data.resolvedTarget) throw new Error("missing resolvedTarget");
-      if (!data.postState?.snapshotId) throw new Error("missing postState");
+      if (!data.matchedBy) throw new Error("missing matchedBy");
     });
 
     await test("back from forms screen", async () => {
@@ -555,13 +555,13 @@ async function runE2E() {
       if (r.isError) throw new Error("modal did not appear");
     });
 
-    await test("dismiss UINavigationController returns lightweight postState", async () => {
-      const data = await client.callToolJSON<{ ok?: boolean; resolvedTarget?: string; postState?: { snapshotId?: string } }>(
+    await test("dismiss UINavigationController returns execution summary", async () => {
+      const data = await client.callToolJSON<{ ok?: boolean; resolvedTarget?: string; matchedBy?: string }>(
         "ui_dismiss", { target: "UINavigationController", session: SESSION }
       );
       if (!data.ok) throw new Error(`expected ok:true, got ${JSON.stringify(data)}`);
       if (!data.resolvedTarget) throw new Error("missing resolvedTarget");
-      if (!data.postState?.snapshotId) throw new Error("missing postState");
+      if (!data.matchedBy) throw new Error("missing matchedBy");
     });
 
     await test("modal gone after dismiss (home screen buttons visible)", async () => {

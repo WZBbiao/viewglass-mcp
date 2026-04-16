@@ -53,7 +53,6 @@ describe("uiInput", () => {
     expect(result.resolvedTarget).toBe("75");
     expect(result.matchedBy).toBe("query fallback");
     expect(result.text).toBe("query");
-    expect(result.postState.snapshotId).toBe("snap-input");
   });
 
   it("passes --json flag", async () => {

@@ -1,6 +1,5 @@
 import { runCLI, resolveSession } from "../runner.js";
 import type { ExecFn } from "../runner.js";
-import { uiSnapshot } from "./ui_snapshot.js";
 import { resolveActionLocator } from "./locator.js";
 
 export type ScrollDirection = "up" | "down" | "left" | "right";
@@ -26,7 +25,7 @@ const DIRECTION_DELTA: Record<ScrollDirection, [number, number]> = {
 };
 
 /**
- * Scroll a scroll view in the given direction. Returns a lightweight post-action summary.
+ * Scroll a scroll view in the given direction and return an execution summary only.
  *
  * Use direction "down" to reveal content below, "up" to scroll back,
  * "left"/"right" for horizontal scroll views.
@@ -41,13 +40,6 @@ export async function uiScroll(
   matchedBy: string;
   direction: ScrollDirection;
   distance: number;
-  postState: {
-    snapshotId: string;
-    visibleText: string[];
-    controllerHints: string[];
-    bottomBarCandidates: unknown[];
-    groupCount: number;
-  };
 }> {
   const session = await resolveSession(input.session, exec);
   const dist = input.distance ?? 300;
@@ -59,8 +51,6 @@ export async function uiScroll(
   if (input.animated) args.push("--animated");
 
   await runCLI(args, { session, exec });
-  await runCLI(["refresh"], { session, exec });
-  const snapshot = await uiSnapshot({ session, compact: true }, exec);
   return {
     ok: true,
     locator: input.locator,
@@ -68,12 +58,5 @@ export async function uiScroll(
     matchedBy: resolved.matchedBy,
     direction: input.direction,
     distance: dist,
-    postState: {
-      snapshotId: snapshot.snapshot.snapshotId,
-      visibleText: snapshot.summary.visibleText.slice(0, 12),
-      controllerHints: snapshot.summary.controllerHints.slice(0, 4),
-      bottomBarCandidates: snapshot.summary.bottomBarCandidates,
-      groupCount: snapshot.summary.groupCount,
-    },
   };
 }

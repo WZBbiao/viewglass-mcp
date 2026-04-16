@@ -200,10 +200,10 @@ server.registerTool(
   {
     description:
       "Tap a UI element. Pass one plain locator string only: visible text, accessibility identifier, class name, or numeric oid. " +
-      "MCP resolves it internally and returns a lightweight post-action summary instead of the full hierarchy. " +
+      "MCP resolves it internally and returns an execution summary only. " +
       "Supports semantic taps on UIControl, UITapGestureRecognizer-backed views, " +
       "UITableViewCell, and UICollectionViewCell, including nested labels inside a cell. " +
-      "Returns { ok, locator, resolvedTarget, matchedBy, postState }.",
+      "Returns { ok, locator, resolvedTarget, matchedBy }.",
     inputSchema: {
       locator: z
         .string()
@@ -230,7 +230,7 @@ server.registerTool(
     description:
       "Scroll a UIScrollView, UITableView, or UICollectionView. " +
       "Pass one plain locator string only: visible text, accessibility identifier, class name, or numeric oid. " +
-      "Returns a lightweight post-action summary instead of the full hierarchy. " +
+      "Returns an execution summary only. " +
       "Use direction 'down' to reveal content below the fold, 'up' to scroll back. " +
       "distance defaults to 300 pts if omitted.",
     inputSchema: {
@@ -642,9 +642,9 @@ server.registerTool(
     description:
       "Enter text into a UITextField or UITextView. " +
       "Dispatches text semantically via the field's input mechanism. " +
-      "Returns { target, resolvedTarget, matchedBy, text, ok: true, postState } on success. " +
+      "Returns { target, resolvedTarget, matchedBy, text, ok: true } on success. " +
       "Pass one plain locator string only: visible text, accessibility identifier, class name, or numeric oid. " +
-      "Returns a lightweight post-action summary instead of the full hierarchy. " +
+      "Returns an execution summary only. " +
       "Use ui_tap first to focus the field if needed.",
     inputSchema: {
       target: z.string().describe("Plain locator string: visible text, accessibility identifier, class name, or numeric oid."),
@@ -737,7 +737,7 @@ server.registerTool(
       "Dismiss a UIViewController (modal dismiss or navigation pop). " +
       "Pass one plain locator string only: visible text, accessibility identifier, class name, or numeric oid. " +
       "The target can be any view or node hosted by the controller. " +
-      "Returns { target, ok: true, resolvedTarget, matchedBy, postState } with a lightweight post-action summary. " +
+      "Returns { target, ok: true, resolvedTarget, matchedBy }. " +
       "Prefer this over ui_invoke popViewControllerAnimated: for standard navigation.",
     inputSchema: {
       target: z

@@ -33,19 +33,19 @@ describe("uiDismiss", () => {
     expect(dismissCall[1]).toEqual(["dismiss", "91", "--json", "--session", "com.test@1234"]);
   });
 
-  it("calls refresh and hierarchy after dismiss", async () => {
+  it("calls dismiss without automatic refresh", async () => {
     const exec = makeExec() as ReturnType<typeof vi.fn>;
     await uiDismiss({ target: "modal", session: "com.test@1234" }, exec);
     const cmds = (exec.mock.calls as [string, string[]][]).map((c) => c[1][0]);
-    expect(cmds).toEqual(["hierarchy", "query", "dismiss", "refresh", "hierarchy"]);
+    expect(cmds).toEqual(["hierarchy", "query", "dismiss"]);
   });
 
-  it("returns lightweight post-action state", async () => {
+  it("returns execution summary only", async () => {
     const exec = makeExec();
     const result = await uiDismiss({ target: "modal", session: "com.test@1234" }, exec);
     expect(result.ok).toBe(true);
     expect(result.target).toBe("modal");
     expect(result.resolvedTarget).toBe("91");
-    expect(result.postState.snapshotId).toBe("snap-dismiss");
+    expect(result.matchedBy).toBe("query fallback");
   });
 });
