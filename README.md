@@ -14,6 +14,7 @@ npx -y viewglass-mcp init --force
 ```
 
 This installs the ViewglassMCP skill into detected client skill directories (for example `.claude/skills` and `.agents/skills`) and appends a guidance line to the project `AGENTS.md`.
+It also creates `.viewglassmcp/config.yaml`, `.viewglassmcp/README.md`, and `.viewglassmcp/recipes.yaml` in the project root.
 
 Then configure the MCP client and restart the client session.
 
@@ -67,11 +68,13 @@ For repeated flows, keep project-local experience under:
 
 - `.viewglassmcp/README.md`
 - `.viewglassmcp/recipes.yaml`
+- `.viewglassmcp/config.yaml`
 
 These files are maintained by the agent after successful live runs.
-They should store reusable target-finding recipes, not fragile runtime `oid` values.
+Use `config.yaml` for stable project defaults like the app bundle identifier.
+Use `recipes.yaml` for reusable target-finding recipes, not fragile runtime `oid` values.
 
-Recommended recipe signals:
+Recommended config / recipe signals:
 
 - `controllerHints`
 - `groupRole`
@@ -133,7 +136,7 @@ npm install -g viewglass-mcp
 ### Session
 
 All tools accept an optional `session` in `bundleId@port` format (e.g. `com.example.App@47164`).
-Omit it and the first running app is auto-detected.
+If omitted, ViewglassMCP first checks `.viewglassmcp/config.yaml` for `sessionDefaults.bundleId` and prefers the matching running app. If no config match exists, it falls back to the first detected running app.
 
 ### Override binary
 

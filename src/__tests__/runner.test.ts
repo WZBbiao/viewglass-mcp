@@ -1,3 +1,7 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import process from "node:process";
 import { describe, it, expect, vi } from "vitest";
 import { detectSession, resolveSession, parseJSON, runCLI } from "../runner.js";
 import type { ExecFn, RunResult } from "../runner.js";
@@ -23,6 +27,29 @@ describe("detectSession", () => {
   it("returns undefined when binary throws", async () => {
     const exec = makeExec(new Error("ENOENT"));
     expect(await detectSession(exec)).toBeUndefined();
+  });
+
+  it("prefers configured bundleId from .viewglassmcp/config.yaml", async () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "viewglass-config-"));
+    const project = path.join(tempRoot, "project");
+    fs.mkdirSync(path.join(project, ".viewglassmcp"), { recursive: true });
+    fs.writeFileSync(
+      path.join(project, ".viewglassmcp", "config.yaml"),
+      'schemaVersion: 1\nsessionDefaults:\n  bundleId: "com.target.app"\n',
+      'utf8'
+    );
+    const originalCwd = process.cwd();
+    process.chdir(project);
+    try {
+      const exec = makeExec({ stdout: JSON.stringify([
+        { bundleIdentifier: "com.other.App", port: 1111 },
+        { bundleIdentifier: "com.target.app", port: 2222 }
+      ]) });
+      expect(await detectSession(exec)).toBe("com.target.app@2222");
+    } finally {
+      process.chdir(originalCwd);
+      fs.rmSync(tempRoot, { recursive: true, force: true });
+    }
   });
 });
 

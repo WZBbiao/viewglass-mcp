@@ -28,6 +28,8 @@ Recommended files:
 
 - `recipes.yaml`
   Reusable target-finding and action recipes.
+- `config.yaml`
+  Project-local Viewglass defaults such as the target app bundle identifier.
 
 Agent discipline:
 

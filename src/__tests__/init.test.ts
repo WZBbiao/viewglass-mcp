@@ -22,6 +22,9 @@ describe("initProject", () => {
       expect(result.agentsStatus).toBe("created");
       const agents = fs.readFileSync(path.join(project, "AGENTS.md"), "utf8");
       expect(agents).toContain("If using ViewglassMCP, use the installed ViewglassMCP skill before calling Viewglass tools.");
+      expect(fs.existsSync(path.join(project, ".viewglassmcp", "README.md"))).toBe(true);
+      expect(fs.existsSync(path.join(project, ".viewglassmcp", "recipes.yaml"))).toBe(true);
+      expect(fs.existsSync(path.join(project, ".viewglassmcp", "config.yaml"))).toBe(true);
     } finally {
       if (originalHome === undefined) {
         delete process.env.HOME;

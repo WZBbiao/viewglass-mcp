@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { logCliFinish, logCliStart } from "./log.js";
+import { loadProjectConfig } from "./project_config.js";
 
 const _execFile = promisify(execFile);
 
@@ -112,6 +113,18 @@ export async function detectSession(exec?: ExecFn): Promise<string | undefined> 
       bundleIdentifier: string;
       port: number;
     }>;
+
+    const config = loadProjectConfig();
+    const bundleId = config?.sessionDefaults?.bundleId?.trim();
+    if (bundleId) {
+      const match =
+        apps.find((app) => app.bundleIdentifier === bundleId) ??
+        apps.find((app) => app.bundleIdentifier.toLowerCase().includes(bundleId.toLowerCase()));
+      if (match) {
+        return `${match.bundleIdentifier}@${match.port}`;
+      }
+    }
+
     if (apps.length > 0) {
       const a = apps[0];
       return `${a.bundleIdentifier}@${a.port}`;

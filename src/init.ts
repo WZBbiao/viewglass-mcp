@@ -107,6 +107,18 @@ function installSkill(skillsDir: string, clientName: string, skillType: SkillTyp
   return { client: clientName, location: targetFile };
 }
 
+function ensureProjectMemoryFiles(projectRoot: string, force = false): void {
+  const memoryDir = path.join(projectRoot, ".viewglassmcp");
+  fs.mkdirSync(memoryDir, { recursive: true });
+  for (const fileName of ["README.md", "recipes.yaml", "config.yaml"]) {
+    const target = path.join(memoryDir, fileName);
+    if (fs.existsSync(target) && !force) continue;
+    const source = path.join(packageRoot(), "templates", ".viewglassmcp", fileName);
+    if (!fs.existsSync(source)) continue;
+    fs.writeFileSync(target, fs.readFileSync(source, "utf8"), "utf8");
+  }
+}
+
 function ensureAgentsGuidance(projectRoot: string, force = false): "created" | "updated" | "no_change" {
   const agentsPath = path.join(projectRoot, AGENTS_FILE_NAME);
   if (!fs.existsSync(agentsPath)) {
@@ -144,6 +156,7 @@ export function initProject(options: InitOptions = {}): InstallResult {
     installSkill(target.skillsDir, target.name, skill, options.force ?? false)
   );
   const projectRoot = resolvePath(options.projectRoot ?? process.cwd());
+  ensureProjectMemoryFiles(projectRoot, options.force ?? false);
   const agentsStatus = ensureAgentsGuidance(projectRoot, options.force ?? false);
   return { installed, agentsStatus };
 }

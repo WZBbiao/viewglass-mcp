@@ -53,6 +53,7 @@ For repeated tasks, maintain project-local experience in:
 
 - `.viewglassmcp/README.md`
 - `.viewglassmcp/recipes.yaml`
+- `.viewglassmcp/config.yaml`
 
 Use this memory to speed up repeated navigation and target resolution.
 
@@ -62,18 +63,20 @@ Rules:
 2. Create these files automatically when needed:
    - `.viewglassmcp/README.md`
    - `.viewglassmcp/recipes.yaml`
-3. Read `.viewglassmcp/recipes.yaml` before repeating a known flow.
-4. After a reusable UI task succeeds on a live app, update or add a recipe in `.viewglassmcp/recipes.yaml` during the same session.
-5. Do not store runtime `oid` as the durable identity of a target.
-6. Prefer multi-signal recipes:
+   - `.viewglassmcp/config.yaml`
+3. Persist the project bundle id in `.viewglassmcp/config.yaml` once it is known.
+4. Read `.viewglassmcp/recipes.yaml` before repeating a known flow.
+5. After a reusable UI task succeeds on a live app, update or add a recipe in `.viewglassmcp/recipes.yaml` during the same session.
+6. Do not store runtime `oid` as the durable identity of a target.
+7. Prefer multi-signal recipes:
    - `controllerHints`
    - `groupRole`
    - `searchableTextAny`
    - `accessibilityIdAny`
    - `classHints`
    - `areaHint`
-7. Every recipe must include `success` conditions.
-8. If a recipe fails repeatedly, revise or remove it.
+8. Every recipe must include `success` conditions.
+9. If a recipe fails repeatedly, revise or remove it.
 
 Default experience loop:
 

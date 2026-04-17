@@ -30,10 +30,13 @@ For repeated flows, keep project-local experience in:
 
 - `.viewglassmcp/README.md`
 - `.viewglassmcp/recipes.yaml`
+- `.viewglassmcp/config.yaml`
+- `.viewglassmcp/config.yaml`
 
 Rules:
 - If the task is likely to repeat and `.viewglassmcp/` does not exist in the current project, create it automatically.
 - Use the package templates as the initial content source.
+- Persist the app bundle id in `.viewglassmcp/config.yaml` once it is known for the project.
 - After a reusable live task succeeds, update `.viewglassmcp/recipes.yaml` in the same session.
 - Do not store runtime `oid` as durable identity.
 - Prefer multi-signal recipes: `controllerHints`, `groupRole`, `searchableTextAny`, `accessibilityIdAny`, `classHints`, `areaHint`, and `success`.
