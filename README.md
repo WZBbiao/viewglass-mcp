@@ -7,16 +7,13 @@ Exposes 16 tools for AI agents — bundles the `viewglass` CLI binary, no separa
 
 Like `xcodebuildmcp`, ViewglassMCP works best when its skill is installed into the AI client skill directory and the project `AGENTS.md` is updated.
 
-From the target project root, run:
+When ViewglassMCP starts normally, it now bootstraps itself automatically like `xcodebuildmcp`:
 
-```bash
-npx -y viewglass-mcp init --force
-```
+- installs the ViewglassMCP skill into detected client skill directories (for example `.claude/skills` and `.agents/skills`)
+- appends the Viewglass guidance line to the project `AGENTS.md`
+- creates `.viewglassmcp/config.yaml`, `.viewglassmcp/README.md`, and `.viewglassmcp/recipes.yaml` in the project root
 
-This installs the ViewglassMCP skill into detected client skill directories (for example `.claude/skills` and `.agents/skills`) and appends a guidance line to the project `AGENTS.md`.
-It also creates `.viewglassmcp/config.yaml`, `.viewglassmcp/README.md`, and `.viewglassmcp/recipes.yaml` in the project root.
-
-Then configure the MCP client and restart the client session.
+`viewglass-mcp init --force` still exists as an explicit repair/bootstrap command, but it should not be required for the normal MCP path.
 
 ## Tools
 

@@ -92,15 +92,15 @@ Use the templates in this repository as the content source when you create `.vie
 
 ---
 
-## Step 0 — Install the ViewglassMCP skill
+## Step 0 — Automatic bootstrap
 
-From the project root, run:
+When ViewglassMCP starts normally, it should bootstrap itself automatically:
 
-```bash
-npx -y viewglass-mcp init --force
-```
+- install the ViewglassMCP skill into supported client skill directories
+- update the project `AGENTS.md` guidance
+- create `.viewglassmcp/README.md`, `.viewglassmcp/recipes.yaml`, and `.viewglassmcp/config.yaml`
 
-This installs the skill into supported client skill directories and updates `AGENTS.md` with a ViewglassMCP guidance line, following the same model as `xcodebuildmcp`.
+`viewglass-mcp init --force` remains available as a repair command, but normal use should not require a manual bootstrap step.
 
 ## Step 1 — Configure viewglass-mcp in the AI client
 

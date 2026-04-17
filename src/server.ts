@@ -33,6 +33,7 @@ import { uiSwipe } from "./tools/ui_swipe.js";
 import { uiLongPress } from "./tools/ui_long_press.js";
 import { uiDismiss } from "./tools/ui_dismiss.js";
 import { logToolFinish, logToolStart, logToolThrow, safeStringify } from "./log.js";
+import { autoBootstrapForMcpStartup } from "./init.js";
 
 export function createServer() {
 const server = new McpServer({
@@ -719,6 +720,7 @@ return server;
 }
 
 export async function startServer() {
+  autoBootstrapForMcpStartup();
   const server = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);

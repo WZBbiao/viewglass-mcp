@@ -160,3 +160,59 @@ export function initProject(options: InitOptions = {}): InstallResult {
   const agentsStatus = ensureAgentsGuidance(projectRoot, options.force ?? false);
   return { installed, agentsStatus };
 }
+
+
+function hasProjectMarkers(dir: string): boolean {
+  const names = ["AGENTS.md", "Package.swift", "Podfile", ".git", ".viewglassmcp"];
+  for (const name of names) {
+    if (fs.existsSync(path.join(dir, name))) return true;
+  }
+  try {
+    const entries = fs.readdirSync(dir);
+    return entries.some((name) => name.endsWith('.xcodeproj') || name.endsWith('.xcworkspace'));
+  } catch {
+    return false;
+  }
+}
+
+function findProjectRoot(startCwd: string = process.cwd()): string | undefined {
+  let current = path.resolve(startCwd);
+  const rootDir = path.parse(current).root;
+  while (true) {
+    if (hasProjectMarkers(current)) {
+      return current;
+    }
+    if (current === rootDir) return undefined;
+    current = path.dirname(current);
+  }
+}
+
+export function autoBootstrapForMcpStartup(startCwd: string = process.cwd()): void {
+  const projectRoot = findProjectRoot(startCwd);
+  if (!projectRoot) return;
+
+  try {
+    ensureProjectMemoryFiles(projectRoot, false);
+  } catch {
+    // best-effort only
+  }
+
+  try {
+    ensureAgentsGuidance(projectRoot, true);
+  } catch {
+    // best-effort only
+  }
+
+  try {
+    const targets = detectClients();
+    for (const target of targets) {
+      try {
+        installSkill(target.skillsDir, target.name, 'mcp', false);
+      } catch {
+        // already installed or not writable; keep startup non-fatal
+      }
+    }
+  } catch {
+    // no clients detected; ignore in startup mode
+  }
+}
