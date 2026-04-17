@@ -10,9 +10,9 @@ const CLIENT_DEFINITIONS = [
 
 const AGENTS_FILE_NAME = "AGENTS.md";
 const AGENTS_GUIDANCE_LINE =
-  "- If using ViewglassMCP, use the installed ViewglassMCP skill before calling Viewglass tools.";
+  "- If using ViewglassMCP, use the installed ViewglassMCP skill before calling Viewglass tools, and after any reusable live task succeeds, update .viewglassmcp/recipes.yaml in the same session.";
 const AGENTS_LEGACY_LINE =
-  "- If using ViewglassMCP, first find and read the installed ViewglassMCP skill before calling Viewglass tools.";
+  "- If using ViewglassMCP, first find and read the installed ViewglassMCP skill before calling Viewglass tools, and after any reusable live task succeeds, update .viewglassmcp/recipes.yaml in the same session.";
 
 type SkillType = "mcp" | "cli";
 

@@ -21,7 +21,7 @@ describe("initProject", () => {
       expect(result.installed[0]?.location).toContain(path.join("skills", "viewglassmcp", "SKILL.md"));
       expect(result.agentsStatus).toBe("created");
       const agents = fs.readFileSync(path.join(project, "AGENTS.md"), "utf8");
-      expect(agents).toContain("If using ViewglassMCP, use the installed ViewglassMCP skill before calling Viewglass tools.");
+      expect(agents).toContain("If using ViewglassMCP, use the installed ViewglassMCP skill before calling Viewglass tools, and after any reusable live task succeeds, update .viewglassmcp/recipes.yaml in the same session.");
       expect(fs.existsSync(path.join(project, ".viewglassmcp", "README.md"))).toBe(true);
       expect(fs.existsSync(path.join(project, ".viewglassmcp", "recipes.yaml"))).toBe(true);
       expect(fs.existsSync(path.join(project, ".viewglassmcp", "config.yaml"))).toBe(true);
@@ -49,7 +49,7 @@ describe("autoBootstrapForMcpStartup", () => {
       autoBootstrapForMcpStartup(project);
       expect(fs.existsSync(path.join(project, ".viewglassmcp", "config.yaml"))).toBe(true);
       const agents = fs.readFileSync(path.join(project, "AGENTS.md"), "utf8");
-      expect(agents).toContain("If using ViewglassMCP, use the installed ViewglassMCP skill before calling Viewglass tools.");
+      expect(agents).toContain("If using ViewglassMCP, use the installed ViewglassMCP skill before calling Viewglass tools, and after any reusable live task succeeds, update .viewglassmcp/recipes.yaml in the same session.");
     } finally {
       process.chdir(originalCwd);
       fs.rmSync(tempRoot, { recursive: true, force: true });

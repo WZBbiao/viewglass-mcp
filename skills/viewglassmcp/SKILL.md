@@ -38,7 +38,7 @@ Rules:
 - If the task is likely to repeat and `.viewglassmcp/` does not exist in the current project, create it automatically.
 - Use the package templates as the initial content source.
 - Persist the app bundle id in `.viewglassmcp/config.yaml` once it is known for the project.
-- After a reusable live task succeeds, update `.viewglassmcp/recipes.yaml` in the same session.
+- After a reusable live task succeeds, you must update `.viewglassmcp/recipes.yaml` in the same session before finishing the task.
 - Do not store runtime `oid` as durable identity.
 - Prefer multi-signal recipes: `controllerHints`, `groupRole`, `searchableTextAny`, `accessibilityIdAny`, `classHints`, `areaHint`, and `success`.
 

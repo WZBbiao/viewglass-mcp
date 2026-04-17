@@ -66,7 +66,7 @@ Rules:
    - `.viewglassmcp/config.yaml`
 3. Persist the project bundle id in `.viewglassmcp/config.yaml` once it is known.
 4. Read `.viewglassmcp/recipes.yaml` before repeating a known flow.
-5. After a reusable UI task succeeds on a live app, update or add a recipe in `.viewglassmcp/recipes.yaml` during the same session.
+5. After a reusable UI task succeeds on a live app, you must update or add a recipe in `.viewglassmcp/recipes.yaml` during the same session before finishing the task.
 6. Do not store runtime `oid` as the durable identity of a target.
 7. Prefer multi-signal recipes:
    - `controllerHints`
@@ -82,7 +82,7 @@ Default experience loop:
 
 1. Check `.viewglassmcp/recipes.yaml` first when the task resembles a previous flow.
 2. If no usable recipe exists, use `ui_snapshot` and complete the task normally.
-3. If the task succeeds and is likely to repeat, update `.viewglassmcp/recipes.yaml` immediately.
+3. If the task succeeds and is likely to repeat, update `.viewglassmcp/recipes.yaml` immediately before finishing the task.
 4. On later runs, prefer the project-local recipe before fallback exploration.
 
 Use the templates in this repository as the content source when you create `.viewglassmcp/`:

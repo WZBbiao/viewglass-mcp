@@ -92,7 +92,7 @@ The bundled `recipes.yaml` is intentionally empty and generic. Agents should onl
 Agent-first rule:
 
 - the agent should create `.viewglassmcp/` automatically inside the current project when a task is likely to repeat
-- after a reusable live task succeeds, the agent should update `.viewglassmcp/recipes.yaml` in the same session
+- after a reusable live task succeeds, the agent must update `.viewglassmcp/recipes.yaml` in the same session before finishing the task
 - on later runs, the agent should consult `.viewglassmcp/recipes.yaml` before fallback exploration
 
 ## Requirements
