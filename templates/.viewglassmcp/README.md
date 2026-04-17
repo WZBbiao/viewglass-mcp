@@ -27,7 +27,9 @@ Rules:
 Recommended files:
 
 - `recipes.yaml`
-  Reusable target-finding and action recipes.
+  Reusable target-finding and action recipes. The template starts empty on purpose.
+  Agents should add project-specific recipes only after a real successful run in
+  the current project.
 - `config.yaml`
   Project-local Viewglass defaults such as the target app bundle identifier.
 

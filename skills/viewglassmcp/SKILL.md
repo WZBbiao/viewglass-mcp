@@ -34,6 +34,7 @@ For repeated flows, keep project-local experience in:
 - `.viewglassmcp/config.yaml`
 
 Rules:
+- The bundled `recipes.yaml` template is intentionally empty and generic. Add project-specific entries only after successful live runs in the current project.
 - If the task is likely to repeat and `.viewglassmcp/` does not exist in the current project, create it automatically.
 - Use the package templates as the initial content source.
 - Persist the app bundle id in `.viewglassmcp/config.yaml` once it is known for the project.

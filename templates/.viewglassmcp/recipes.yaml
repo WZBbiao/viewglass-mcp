@@ -1,50 +1,8 @@
 version: 1
 
-recipes:
-  - id: switch_to_me_tab
-    description: Switch to the Me tab from the main bottom navigation.
-    screen:
-      controllerHints:
-        - TapTap.TapTabBarController
-      groupRole:
-        - bottomNavigation
-    target:
-      groupRole: bottomNavigation
-      searchableTextAny:
-        - Me
-        - 我
-      selected: false
-    action:
-      type: tap
-    success:
-      selectedTextAny:
-        - Me
-        - 我
-    stats:
-      successCount: 0
-      failureCount: 0
-      lastSuccessAt: null
-
-  - id: open_settings_from_me
-    description: Open the Settings entry from the Me page.
-    screen:
-      visibleTextAny:
-        - Me
-        - 我
-    target:
-      searchableTextAny:
-        - Settings
-        - 设置
-      classHints:
-        - UIButton
-      areaHint: topRight
-    action:
-      type: tap
-    success:
-      visibleTextAny:
-        - Account & security
-        - 账号与安全
-    stats:
-      successCount: 0
-      failureCount: 0
-      lastSuccessAt: null
+# This file starts empty on purpose.
+#
+# Agents should add project-specific recipes only after a live task succeeds and
+# the flow is likely to repeat. Do not prefill this file with recipes from a
+# different app or project.
+recipes: []

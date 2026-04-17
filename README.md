@@ -83,6 +83,9 @@ Recommended config / recipe signals:
 
 Templates are included in this package under:
 
+The bundled `recipes.yaml` is intentionally empty and generic. Agents should only write project-specific recipes after successful live runs in the current project.
+
+
 - `templates/.viewglassmcp/README.md`
 - `templates/.viewglassmcp/recipes.yaml`
 

@@ -87,6 +87,9 @@ Default experience loop:
 
 Use the templates in this repository as the content source when you create `.viewglassmcp/`:
 
+The bundled `recipes.yaml` is intentionally empty and generic. Do not keep sample recipes from another app; add project-specific entries only after successful live runs in the current project.
+
+
 - `templates/.viewglassmcp/README.md`
 - `templates/.viewglassmcp/recipes.yaml`
 
