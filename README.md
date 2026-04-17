@@ -180,7 +180,7 @@ When session logging is enabled, each line includes `session=<bundleId@port>` wh
 With file splitting enabled, examples look like:
 
 - `/tmp/viewglass-mcp.log.com.example.app@47175.log`
-- `/tmp/viewglass-mcp.log.com.wzb.ViewglassDemo@47164.log`
+- `/tmp/viewglass-mcp.log.com.example.app@47164.log`
 
 ## Development
 

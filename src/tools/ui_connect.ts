@@ -6,7 +6,7 @@ import { defaultExec } from "../runner.js";
 export interface UIConnectInput {
   /**
    * Bundle ID of the app to connect to.
-   * Partial match is supported (e.g. "ViewglassDemo" matches "com.wzb.ViewglassDemo").
+   * Partial match is supported (e.g. "ExampleApp" matches "com.example.app").
    */
   bundleId: string;
 }

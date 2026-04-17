@@ -527,7 +527,7 @@ server.registerTool(
       "Connect to a specific iOS app by bundle ID. " +
       "This is the preferred first step — infer the bundle ID from the project files " +
       "(Info.plist, .xcodeproj, or Package.swift) and call this directly instead of ui_scan. " +
-      "Partial bundle ID is supported (e.g. 'ViewglassDemo' matches 'com.wzb.ViewglassDemo'). " +
+      "Partial bundle ID is supported (e.g. 'ExampleApp' matches 'com.example.app'). " +
       "Returns a session string (bundleId@port) — pass it to all other Viewglass tools. " +
       "After a successful connection, ViewglassMCP persists the resolved bundle id into .viewglassmcp/config.yaml for future runs. " +
       "If the app is not found: ask the user to build and run it in Xcode (Debug scheme) and try again. " +

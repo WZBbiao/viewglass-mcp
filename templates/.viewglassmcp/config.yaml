@@ -1,5 +1,5 @@
 schemaVersion: 1
 sessionDefaults:
   # Fill this with the app bundle id once the project/session is known.
-  # Example: com.taptap.global.lite
+  # Example: com.example.app
   bundleId: ""
