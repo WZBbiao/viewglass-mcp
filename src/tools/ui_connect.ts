@@ -1,4 +1,5 @@
 import { VIEWGLASS_BIN, parseJSON } from "../runner.js";
+import { saveProjectBundleId } from "../project_config.js";
 import type { ExecFn } from "../runner.js";
 import { defaultExec } from "../runner.js";
 
@@ -59,6 +60,8 @@ export async function uiConnect(
         "then call ui_connect again."
     );
   }
+
+  saveProjectBundleId(match.bundleIdentifier);
 
   return {
     session: `${match.bundleIdentifier}@${match.port}`,

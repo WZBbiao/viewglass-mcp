@@ -8,6 +8,33 @@ export interface ViewglassProjectConfig {
   };
 }
 
+function hasProjectMarkers(dir: string): boolean {
+  const names = ["AGENTS.md", "Package.swift", "Podfile", ".git", ".viewglassmcp"];
+  for (const name of names) {
+    if (fs.existsSync(path.join(dir, name))) return true;
+  }
+  try {
+    const entries = fs.readdirSync(dir);
+    return entries.some((name) => name.endsWith(".xcodeproj") || name.endsWith(".xcworkspace"));
+  } catch {
+    return false;
+  }
+}
+
+function findProjectRoot(startCwd: string = process.cwd()): string | undefined {
+  let current = path.resolve(startCwd);
+  const root = path.parse(current).root;
+  while (true) {
+    if (hasProjectMarkers(current)) {
+      return current;
+    }
+    if (current === root) {
+      return undefined;
+    }
+    current = path.dirname(current);
+  }
+}
+
 function findConfigPath(startCwd: string = process.cwd()): string | undefined {
   let current = path.resolve(startCwd);
   const root = path.parse(current).root;
@@ -23,10 +50,7 @@ function findConfigPath(startCwd: string = process.cwd()): string | undefined {
   }
 }
 
-export function loadProjectConfig(startCwd: string = process.cwd()): ViewglassProjectConfig | undefined {
-  const configPath = findConfigPath(startCwd);
-  if (!configPath) return undefined;
-  const raw = fs.readFileSync(configPath, "utf8");
+function parseProjectConfig(raw: string): ViewglassProjectConfig {
   const lines = raw.split(/\r?\n/);
   const config: ViewglassProjectConfig = { schemaVersion: 1 };
   let inSessionDefaults = false;
@@ -54,4 +78,43 @@ export function loadProjectConfig(startCwd: string = process.cwd()): ViewglassPr
   }
 
   return config;
+}
+
+export function loadProjectConfig(startCwd: string = process.cwd()): ViewglassProjectConfig | undefined {
+  const configPath = findConfigPath(startCwd);
+  if (!configPath) return undefined;
+  return parseProjectConfig(fs.readFileSync(configPath, "utf8"));
+}
+
+export function saveProjectBundleId(bundleId: string, startCwd: string = process.cwd()): string | undefined {
+  const normalized = bundleId.trim();
+  if (!normalized) return undefined;
+
+  const projectRoot = findProjectRoot(startCwd);
+  if (!projectRoot) return undefined;
+
+  const memoryDir = path.join(projectRoot, ".viewglassmcp");
+  fs.mkdirSync(memoryDir, { recursive: true });
+
+  const configPath = path.join(memoryDir, "config.yaml");
+  const current = fs.existsSync(configPath)
+    ? parseProjectConfig(fs.readFileSync(configPath, "utf8"))
+    : { schemaVersion: 1 } satisfies ViewglassProjectConfig;
+
+  const next: ViewglassProjectConfig = {
+    schemaVersion: current.schemaVersion || 1,
+    sessionDefaults: {
+      ...(current.sessionDefaults ?? {}),
+      bundleId: normalized,
+    },
+  };
+
+  const lines = [
+    `schemaVersion: ${next.schemaVersion}`,
+    "sessionDefaults:",
+    `  bundleId: \"${next.sessionDefaults?.bundleId ?? ""}\"`,
+    "",
+  ];
+  fs.writeFileSync(configPath, lines.join("\n"), "utf8");
+  return configPath;
 }

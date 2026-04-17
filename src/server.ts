@@ -529,6 +529,7 @@ server.registerTool(
       "(Info.plist, .xcodeproj, or Package.swift) and call this directly instead of ui_scan. " +
       "Partial bundle ID is supported (e.g. 'ViewglassDemo' matches 'com.wzb.ViewglassDemo'). " +
       "Returns a session string (bundleId@port) — pass it to all other Viewglass tools. " +
+      "After a successful connection, ViewglassMCP persists the resolved bundle id into .viewglassmcp/config.yaml for future runs. " +
       "If the app is not found: ask the user to build and run it in Xcode (Debug scheme) and try again. " +
       "Fall back to ui_scan only if the bundle ID cannot be determined from the project.",
     inputSchema: {

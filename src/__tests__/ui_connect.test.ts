@@ -1,4 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { uiConnect } from "../tools/ui_connect.js";
 import type { ExecFn } from "../runner.js";
 
@@ -13,6 +16,10 @@ function makeExec(apps: typeof APPS, error?: Error): ExecFn {
     return { stdout: JSON.stringify(apps), stderr: "" };
   });
 }
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("uiConnect", () => {
   it("returns session for exact bundleId match", async () => {
@@ -39,6 +46,21 @@ describe("uiConnect", () => {
     const exec = makeExec(APPS);
     const result = await uiConnect({ bundleId: "com.wzb.ViewglassDemo" }, exec);
     expect(result.session).toBe("com.wzb.ViewglassDemo@1234");
+  });
+
+  it("persists the resolved bundle id into .viewglassmcp/config.yaml", async () => {
+    const project = fs.mkdtempSync(path.join(os.tmpdir(), "viewglass-connect-"));
+    fs.mkdirSync(path.join(project, ".git"));
+    vi.stubEnv("PWD", project);
+    process.chdir(project);
+
+    const exec = makeExec(APPS);
+    const result = await uiConnect({ bundleId: "FooApp" }, exec);
+    expect(result.bundleId).toBe("com.myapp.FooApp");
+
+    const configPath = path.join(project, ".viewglassmcp", "config.yaml");
+    expect(fs.existsSync(configPath)).toBe(true);
+    expect(fs.readFileSync(configPath, "utf8")).toContain('bundleId: "com.myapp.FooApp"');
   });
 
   it("throws with available list when app not found", async () => {
