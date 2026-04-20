@@ -34,6 +34,7 @@ import { uiLongPress } from "./tools/ui_long_press.js";
 import { uiDismiss } from "./tools/ui_dismiss.js";
 import { logToolFinish, logToolStart, logToolThrow, safeStringify } from "./log.js";
 import { autoBootstrapForMcpStartup } from "./init.js";
+import { noteSuccessfulTool } from "./project_memory.js";
 
 export function createServer() {
 const server = new McpServer({
@@ -72,6 +73,18 @@ async function withToolLogging<TArgs extends object>(
   logToolStart(name, args);
   try {
     const result = await run();
+    const parsedFirstText = (() => {
+      const firstText = result.content[0]?.text;
+      if (!firstText || result.isError === true) return undefined;
+      try {
+        return JSON.parse(firstText);
+      } catch {
+        return undefined;
+      }
+    })();
+    if (parsedFirstText !== undefined) {
+      noteSuccessfulTool(name, args, parsedFirstText);
+    }
     logToolFinish(name, summarizeToolResponse(result), Date.now() - startedAt, session);
     return result;
   } catch (error: unknown) {

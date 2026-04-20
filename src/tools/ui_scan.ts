@@ -1,4 +1,5 @@
 import { VIEWGLASS_BIN, parseJSON } from "../runner.js";
+import { saveProjectBundleId } from "../project_config.js";
 import type { ExecFn } from "../runner.js";
 import { defaultExec } from "../runner.js";
 
@@ -137,6 +138,10 @@ export async function uiScan(exec?: ExecFn): Promise<UIScanResult> {
         "build & run the app and call ui_scan again.",
       setupGuide: SETUP_GUIDE,
     };
+  }
+
+  if (sessions.length === 1) {
+    saveProjectBundleId(sessions[0].bundleId);
   }
 
   return {
