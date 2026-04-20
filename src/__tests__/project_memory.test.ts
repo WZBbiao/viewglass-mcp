@@ -29,6 +29,7 @@ function makeSnapshot(session = "com.example.app@47175"): UISnapshotOutput {
       groupCount: 0,
     },
     groups: [],
+    matchedRecipes: [],
     nodes: [
       {
         id: "node-1",

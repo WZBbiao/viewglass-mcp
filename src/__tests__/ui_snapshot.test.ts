@@ -1,4 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import { uiSnapshot } from "../tools/ui_snapshot.js";
 import type { ExecFn } from "../runner.js";
 
@@ -255,6 +258,10 @@ function makeExec(stdout: string, error?: Error): ExecFn {
   });
 }
 
+afterEach(() => {
+  delete process.env.PWD;
+});
+
 describe("uiSnapshot", () => {
   it("calls hierarchy --json with session", async () => {
     const exec = makeExec(JSON.stringify(hierarchyFixture)) as ReturnType<typeof vi.fn>;
@@ -305,6 +312,44 @@ describe("uiSnapshot", () => {
     expect(meLabel?.text).toBe("Me");
     expect(meLabel?.actionTargetOid).toBe(230);
     expect(meLabel?.groupId).toBe("group_bottom_1");
+    expect(result.matchedRecipes).toEqual([]);
+  });
+
+  it("loads matched project recipes and resolves recommended oids", async () => {
+    const project = fs.mkdtempSync(path.join(os.tmpdir(), "viewglass-snapshot-recipes-"));
+    fs.mkdirSync(path.join(project, ".git"));
+    fs.mkdirSync(path.join(project, ".viewglassmcp"));
+    fs.writeFileSync(
+      path.join(project, ".viewglassmcp", "recipes.yaml"),
+      `version: 1
+
+recipes:
+  - id: "switch_to_me"
+    description: "Switch to Me."
+    screen:
+      controllerHints:
+        - "UIWindow"
+      visibleTextAny:
+        - "Agent Playground"
+        - "Me"
+    steps:
+      - tool: "ui_tap"
+        role: "switcherItem"
+        groupRole: "bottomNavigation"
+        searchableTextAny:
+          - "Me"
+`,
+      "utf8"
+    );
+    process.chdir(project);
+    process.env.PWD = project;
+
+    const exec = makeExec(JSON.stringify(hierarchyFixture));
+    const result = await uiSnapshot({ session: "com.test@1234" }, exec);
+
+    expect(result.matchedRecipes).toHaveLength(1);
+    expect(result.matchedRecipes[0]?.id).toBe("switch_to_me");
+    expect(result.matchedRecipes[0]?.suggestedSteps[0]?.recommendedOid).toBe(230);
   });
 
   it("omits rawTree by default", async () => {

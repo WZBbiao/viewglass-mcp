@@ -19,7 +19,7 @@ When ViewglassMCP starts normally, it now bootstraps itself automatically like `
 
 | Tool | Description |
 |---|---|
-| `ui_snapshot` | Capture an agent-first UI snapshot with summary, groups, searchable nodes, and optional rawTree. |
+| `ui_snapshot` | Capture an agent-first UI snapshot with summary, groups, searchable nodes, matched recipes, and optional rawTree. |
 | `ui_attr_get` | Get runtime attributes of a node by OID. |
 | `ui_tap` | Tap a node by exact `oid` from `ui_snapshot`. Supports UIControl, gesture-backed views, UITableViewCell, and UICollectionViewCell. |
 | `ui_scroll` | Scroll a scroll view by exact `oid` from `ui_snapshot` and return an execution summary. |

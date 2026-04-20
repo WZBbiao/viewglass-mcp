@@ -342,7 +342,7 @@ export function noteSuccessfulTool(name: string, args: unknown, parsed: unknown)
     return;
   }
 
-  if (["ui_wait", "ui_assert", "ui_attr_get", "ui_screenshot"].includes(name)) {
+  if (["ui_wait", "ui_assert", "ui_attr_get"].includes(name)) {
     maybePersistFlowDraft(session, name);
   }
 }

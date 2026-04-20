@@ -11,7 +11,7 @@ Use Viewglass MCP tools to inspect and interact with a live iOS app.
 
 - For navigation, custom UI, tab switching, settings pages, or any unknown screen, start with `ui_snapshot`.
 - Treat `ui_snapshot` as the source of truth for the current page.
-- Use `summary`, `groups`, and `nodes` to identify the correct target.
+- Use `summary`, `groups`, `nodes`, and `matchedRecipes` to identify the correct target.
 - Do not try to scan for sessions manually. If `.viewglassmcp/config.yaml` already has a `bundleId`, let ViewglassMCP resolve the session automatically.
 
 ## Step 2: Resolve an Exact OID Before Executing

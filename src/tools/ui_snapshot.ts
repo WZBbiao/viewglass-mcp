@@ -1,6 +1,8 @@
 import { runCLI, resolveSession, parseJSON } from "../runner.js";
 import type { ExecFn } from "../runner.js";
 
+import { loadProjectRecipes, matchProjectRecipes, type ProjectRecipeMatch } from "../project_recipes.js";
+
 export interface UISnapshotInput {
   /** Viewglass session in bundleId@port format. Auto-detected if omitted. */
   session?: string;
@@ -154,6 +156,7 @@ export interface UISnapshotOutput {
   summary: UISnapshotSummary;
   groups: UISnapshotGroup[];
   nodes: UISnapshotNode[];
+  matchedRecipes: ProjectRecipeMatch[];
   rawTree?: RawHierarchy;
 }
 
@@ -201,8 +204,7 @@ function buildAgentSnapshot(hierarchy: RawHierarchy, session: string, compact: b
     .sort(sortNodes);
 
   const summary = buildSummary(hierarchy, nodes, groups);
-
-  return {
+  const partial: UISnapshotOutput = {
     app: {
       appName: hierarchy.appInfo.appName,
       bundleIdentifier: hierarchy.appInfo.bundleIdentifier,
@@ -220,8 +222,12 @@ function buildAgentSnapshot(hierarchy: RawHierarchy, session: string, compact: b
     summary,
     groups,
     nodes,
+    matchedRecipes: [],
     rawTree: compact ? undefined : hierarchy,
   };
+  partial.matchedRecipes = matchProjectRecipes(partial, loadProjectRecipes());
+
+  return partial;
 }
 
 function flattenTrees(trees: RawTree[]): RawNode[] {

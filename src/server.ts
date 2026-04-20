@@ -100,7 +100,7 @@ server.registerTool(
     description:
       "Capture the current UI as an agent-first snapshot. " +
       "The result includes app/session metadata, a summary, inferred switcher/navigation groups, " +
-      "and a flattened node index with searchableText and actionTargetOid fields so agents can " +
+      "a flattened node index with searchableText and actionTargetOid fields, and matched project-local recipes when available, so agents can " +
       "find targets without guessing UIKit class names. " +
       "Best practice: for any navigation or custom UI task, call ui_snapshot first to understand the current page, " +
       "then use ui_tap with a concrete visible label or oid from the snapshot. " +
