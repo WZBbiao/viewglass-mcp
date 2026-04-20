@@ -217,4 +217,4 @@ then call `ui_connect` with that bundle ID.
 
 - **Session returned** → setup complete, pass the session string to all other Viewglass tools.
 - **App not found** → check: (1) app is running in Debug scheme, (2) LookinServer is linked to the app target, (3) MCP config was saved and client was restarted. Then retry `ui_connect`.
-- **Bundle ID unknown** → fall back to `ui_scan` to see what sessions are available.
+- **Bundle ID unknown** → inspect project files (`Info.plist`, `.xcodeproj`, `Package.swift`) or use the current snapshot/app metadata to infer the bundle ID, then call `ui_connect`.

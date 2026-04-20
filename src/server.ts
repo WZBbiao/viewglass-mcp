@@ -2,8 +2,8 @@
 /**
  * Viewglass MCP Server
  *
- * Exposes 16 tools for AI agents to inspect and interact with iOS app UI at runtime:
- *   Read:        ui_scan, ui_snapshot, ui_attr_get
+ * Exposes 15 tools for AI agents to inspect and interact with iOS app UI at runtime:
+ *   Read:        ui_snapshot, ui_attr_get
  *   Write:       ui_set_attr, ui_invoke
  *   Interact:    ui_tap, ui_scroll, ui_swipe, ui_long_press, ui_input, ui_dismiss
  *   Assert/Wait: ui_assert, ui_wait
@@ -25,7 +25,6 @@ import { compareWithDesign } from "./tools/compare_with_design.js";
 import { uiInvoke } from "./tools/ui_invoke.js";
 import { uiWait } from "./tools/ui_wait.js";
 import { uiAssert } from "./tools/ui_assert.js";
-import { uiScan } from "./tools/ui_scan.js";
 import { uiConnect } from "./tools/ui_connect.js";
 import { uiScreenshot } from "./tools/ui_screenshot.js";
 import { uiInput } from "./tools/ui_input.js";
@@ -501,36 +500,6 @@ server.registerTool(
     })
 );
 
-// ─── ui_scan ─────────────────────────────────────────────────────────────────
-
-server.registerTool(
-  "ui_scan",
-  {
-    description:
-      "Scan for all running iOS apps with ViewglassServer integrated. " +
-      "Use this when you don't know the target app's bundle ID, or when ui_connect fails. " +
-      "If you already know the bundle ID, prefer ui_connect directly — it's faster. " +
-      "If sessions are found: check that the bundleId matches the app you intend to inspect. " +
-      "If the session does not match, call ui_connect with the target bundleId to switch apps. " +
-      "Never give up just because the session bundleId is different from the target app. " +
-      "If sessions is empty: the result includes a complete setupGuide — " +
-      "read it and help the user add ViewglassServer to their iOS project " +
-      "(SPM or CocoaPods, Debug only), then ask them to build & run the app " +
-      "and call ui_scan again to verify.",
-    inputSchema: {},
-    annotations: { readOnlyHint: true },
-  },
-  async () =>
-    withToolLogging("ui_scan", {}, async () => {
-      try {
-        const result = await uiScan();
-        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-      } catch (e) {
-        return { isError: true, content: [{ type: "text", text: String(e) }] };
-      }
-    })
-);
-
 // ─── ui_connect ───────────────────────────────────────────────────────────────
 
 server.registerTool(
@@ -538,13 +507,13 @@ server.registerTool(
   {
     description:
       "Connect to a specific iOS app by bundle ID. " +
-      "This is the preferred first step — infer the bundle ID from the project files " +
-      "(Info.plist, .xcodeproj, or Package.swift) and call this directly instead of ui_scan. " +
+      "This is the preferred explicit first step when the project bundle ID is known — infer the bundle ID from the project files " +
+      "(Info.plist, .xcodeproj, or Package.swift) and call this directly. " +
       "Partial bundle ID is supported (e.g. 'ExampleApp' matches 'com.example.app'). " +
       "Returns a session string (bundleId@port) — pass it to all other Viewglass tools. " +
       "After a successful connection, ViewglassMCP persists the resolved bundle id into .viewglassmcp/config.yaml for future runs. " +
-      "If the app is not found: ask the user to build and run it in Xcode (Debug scheme) and try again. " +
-      "Fall back to ui_scan only if the bundle ID cannot be determined from the project.",
+      "Once config.yaml has a bundleId, other Viewglass tools should usually omit session and let MCP resolve it automatically. " +
+      "If the app is not found: ask the user to build and run it in Xcode (Debug scheme) and try again.",
     inputSchema: {
       bundleId: z
         .string()

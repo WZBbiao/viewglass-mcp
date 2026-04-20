@@ -1,7 +1,7 @@
 # viewglass-mcp
 
 MCP Server for [Viewglass](https://github.com/WZBbiao/viewglass) iOS UI inspection.
-Exposes 16 tools for AI agents — bundles the `viewglass` CLI binary, no separate install required.
+Exposes 15 tools for AI agents — bundles the `viewglass` CLI binary, no separate install required.
 
 ## Install the Viewglass skill
 
@@ -27,7 +27,6 @@ When ViewglassMCP starts normally, it now bootstraps itself automatically like `
 | `ui_invoke` | Call any ObjC selector on any node — the highest-leverage tool. |
 | `ui_wait` | Poll until a node appears, disappears, or an attribute matches. |
 | `ui_assert` | Assert visibility, text, count, or attribute — fails as MCP error. |
-| `ui_scan` | List all running Viewglass sessions. |
 | `ui_connect` | Resolve and pin the active session to a specific app bundle id. |
 | `ui_screenshot` | Capture a PNG of the full screen or a specific node. |
 | `ui_input` | Type text into a UITextField / UITextView by exact `oid` from `ui_snapshot` and return an execution summary. |
@@ -137,6 +136,7 @@ npm install -g viewglass-mcp
 
 All tools accept an optional `session` in `bundleId@port` format (e.g. `com.example.App@47164`).
 If omitted, ViewglassMCP first checks `.viewglassmcp/config.yaml` for `sessionDefaults.bundleId` and prefers the matching running app. If no config match exists, it falls back to the first detected running app.
+The agent should usually rely on this automatic resolution instead of trying to scan for sessions manually.
 
 ### Override binary
 

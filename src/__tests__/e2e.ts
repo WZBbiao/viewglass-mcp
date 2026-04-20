@@ -428,25 +428,6 @@ async function runE2E() {
       if (!data.instructions?.includes("Figma MCP")) throw new Error("missing instructions");
     });
 
-    // ─── ui_scan ────────────────────────────────────────────────────────────
-    console.log("\n[ ui_scan ]");
-
-    await test("returns sessions array with the running app", async () => {
-      const data = await client.callToolJSON<{ sessions: Array<{ bundleId: string; session: string }> }>(
-        "ui_scan", {}
-      );
-      if (!Array.isArray(data.sessions)) throw new Error("missing sessions array");
-      if (data.sessions.length === 0) throw new Error("expected at least 1 session");
-      const found = data.sessions.find((s) => s.session === SESSION);
-      if (!found) throw new Error(`session '${SESSION}' not found in: ${JSON.stringify(data.sessions.map((s) => s.session))}`);
-    });
-
-    await test("session string has bundleId@port format", async () => {
-      const data = await client.callToolJSON<{ sessions: Array<{ session: string }> }>("ui_scan", {});
-      const s = data.sessions[0];
-      if (!s.session.includes("@")) throw new Error(`unexpected session format: ${s.session}`);
-    });
-
     // ─── ui_invoke ──────────────────────────────────────────────────────────
     console.log("\n[ ui_invoke ]");
 
