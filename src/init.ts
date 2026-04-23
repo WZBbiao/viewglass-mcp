@@ -188,6 +188,21 @@ function findProjectRoot(startCwd: string = process.cwd()): string | undefined {
 }
 
 export function autoBootstrapForMcpStartup(startCwd: string = process.cwd()): void {
+  try {
+    const targets = detectClients();
+    for (const target of targets) {
+      try {
+        installSkill(target.skillsDir, target.name, 'mcp', false);
+      } catch {
+        // already installed or not writable; keep startup non-fatal
+      }
+    }
+  } catch {
+    // no clients detected; ignore in startup mode
+  }
+}
+
+export function ensureProjectBootstrapForUsage(startCwd: string = process.cwd()): void {
   const projectRoot = findProjectRoot(startCwd);
   if (!projectRoot) return;
 
@@ -201,18 +216,5 @@ export function autoBootstrapForMcpStartup(startCwd: string = process.cwd()): vo
     ensureAgentsGuidance(projectRoot, true);
   } catch {
     // best-effort only
-  }
-
-  try {
-    const targets = detectClients();
-    for (const target of targets) {
-      try {
-        installSkill(target.skillsDir, target.name, 'mcp', false);
-      } catch {
-        // already installed or not writable; keep startup non-fatal
-      }
-    }
-  } catch {
-    // no clients detected; ignore in startup mode
   }
 }

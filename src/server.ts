@@ -32,7 +32,7 @@ import { uiSwipe } from "./tools/ui_swipe.js";
 import { uiLongPress } from "./tools/ui_long_press.js";
 import { uiDismiss } from "./tools/ui_dismiss.js";
 import { logToolFinish, logToolStart, logToolThrow, safeStringify } from "./log.js";
-import { autoBootstrapForMcpStartup } from "./init.js";
+import { autoBootstrapForMcpStartup, ensureProjectBootstrapForUsage } from "./init.js";
 import { noteSuccessfulTool } from "./project_memory.js";
 
 export function createServer() {
@@ -64,6 +64,7 @@ async function withToolLogging<TArgs extends object>(
   args: TArgs,
   run: () => Promise<ToolResponse>
 ): Promise<ToolResponse> {
+  ensureProjectBootstrapForUsage();
   const startedAt = Date.now();
   const session =
     "session" in args && typeof (args as { session?: unknown }).session === "string"

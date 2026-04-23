@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { autoBootstrapForMcpStartup, initProject } from "../init.js";
+import { autoBootstrapForMcpStartup, ensureProjectBootstrapForUsage, initProject } from "../init.js";
 
 describe("initProject", () => {
   it("installs skill and updates AGENTS.md", () => {
@@ -38,7 +38,7 @@ describe("initProject", () => {
 
 
 describe("autoBootstrapForMcpStartup", () => {
-  it("creates project memory and AGENTS guidance without throwing", () => {
+  it("does not mutate project files on MCP startup", () => {
     const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "viewglass-mcp-auto-"));
     const project = path.join(tempRoot, "project");
     fs.mkdirSync(project, { recursive: true });
@@ -47,6 +47,26 @@ describe("autoBootstrapForMcpStartup", () => {
     try {
       process.chdir(project);
       autoBootstrapForMcpStartup(project);
+      expect(fs.existsSync(path.join(project, ".viewglassmcp", "config.yaml"))).toBe(false);
+      const agents = fs.readFileSync(path.join(project, "AGENTS.md"), "utf8");
+      expect(agents).not.toContain("If using ViewglassMCP, use the installed ViewglassMCP skill before calling Viewglass tools, and after any reusable live task succeeds, update .viewglassmcp/recipes.yaml in the same session.");
+    } finally {
+      process.chdir(originalCwd);
+      fs.rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("ensureProjectBootstrapForUsage", () => {
+  it("creates project memory and AGENTS guidance on first real tool usage", () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "viewglass-mcp-usage-"));
+    const project = path.join(tempRoot, "project");
+    fs.mkdirSync(project, { recursive: true });
+    fs.writeFileSync(path.join(project, "AGENTS.md"), "# AGENTS.md\n", "utf8");
+    const originalCwd = process.cwd();
+    try {
+      process.chdir(project);
+      ensureProjectBootstrapForUsage(project);
       expect(fs.existsSync(path.join(project, ".viewglassmcp", "config.yaml"))).toBe(true);
       const agents = fs.readFileSync(path.join(project, "AGENTS.md"), "utf8");
       expect(agents).toContain("If using ViewglassMCP, use the installed ViewglassMCP skill before calling Viewglass tools, and after any reusable live task succeeds, update .viewglassmcp/recipes.yaml in the same session.");
