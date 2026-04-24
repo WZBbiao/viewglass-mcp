@@ -34,6 +34,15 @@ export interface ResolvedQueryLocator {
   matchedBy: string;
 }
 
+export interface ResolveQueryLocatorOptions {
+  /**
+   * Use a broad fallback for wait-style locators that may not exist in the
+   * current snapshot yet. This avoids prematurely turning future class names
+   * like GameDetailViewController into accessibility-id queries.
+   */
+  fallback?: "default" | "broad";
+}
+
 type SnapshotGroupLike = {
   id: string;
   role: "bottomNavigation" | "topSwitcher";
@@ -80,6 +89,22 @@ export function buildQueryExpressions(raw: string): string[] {
   if (/^\d+$/.test(value)) return [value];
 
   return [`#${value}`, `contains:"${escapeContains(value)}"`, value];
+}
+
+function canUseBareQueryExpression(value: string): boolean {
+  return /^[A-Za-z_][A-Za-z0-9_.$]*$/.test(value);
+}
+
+export function buildBroadQueryExpression(raw: string): string {
+  const value = raw.trim();
+  if (!value) throw new Error("locator must be a non-empty string");
+
+  const legacy = parseLegacyLocator(value);
+  if (legacy || /^\d+$/.test(value)) return value;
+
+  const expressions = [`#${value}`, `contains:"${escapeContains(value)}"`];
+  if (canUseBareQueryExpression(value)) expressions.push(value);
+  return `(${expressions.join(" OR ")})`;
 }
 
 async function runQueryExpression(
@@ -171,7 +196,8 @@ function classifyGroups(raw: string, groups: SnapshotGroupLike[]) {
 export async function resolveQueryLocatorExpression(
   raw: string,
   session: string,
-  exec?: ExecFn
+  exec?: ExecFn,
+  options: ResolveQueryLocatorOptions = {}
 ): Promise<ResolvedQueryLocator> {
   const value = raw.trim();
   if (!value) throw new Error("locator must be a non-empty string");
@@ -215,8 +241,11 @@ export async function resolveQueryLocatorExpression(
 
   return {
     input: value,
-    queryExpression: buildQueryExpressions(value)[0],
-    matchedBy: "default fallback",
+    queryExpression:
+      options.fallback === "broad"
+        ? buildBroadQueryExpression(value)
+        : buildQueryExpressions(value)[0],
+    matchedBy: options.fallback === "broad" ? "broad fallback" : "default fallback",
   };
 }
 

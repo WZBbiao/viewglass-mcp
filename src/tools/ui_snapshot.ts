@@ -92,6 +92,7 @@ interface UISnapshotNode {
   oidType?: string;
   frame: RawRect;
   controllerClass?: string | null;
+  controllerOid?: number | null;
   text?: string;
   searchableText: string[];
   accessibilityIdentifier?: string | null;
@@ -300,8 +301,9 @@ function buildSnapshotNode(
   const visible = (node.isHidden ?? false) === false && (node.alpha ?? 1) > 0 && node.frame.width > 0 && node.frame.height > 0;
   const interactive = Boolean(node.isUserInteractionEnabled) && visible;
   const actionTargetOid = actionTargetByOid.get(node.oid) ?? node.primaryOid ?? node.oid;
+  const actionTarget = nodesByOid.get(actionTargetOid) ?? node;
   const group = groupByActionOid.get(actionTargetOid);
-  const actions = inferActions(node, interactive);
+  const actions = inferActions(node, actionTarget, interactive, searchableText);
   const role = inferRole(node, searchableText, actions, group);
 
   return {
@@ -312,6 +314,7 @@ function buildSnapshotNode(
     oidType: node.oidType,
     frame: node.frame,
     controllerClass: node.hostViewControllerClassName,
+    controllerOid: node.hostViewControllerOid,
     text,
     searchableText,
     accessibilityIdentifier: node.accessibilityIdentifier,
@@ -324,17 +327,44 @@ function buildSnapshotNode(
   };
 }
 
-function inferActions(node: RawNode, interactive: boolean): string[] {
+function inferActions(
+  node: RawNode,
+  actionTarget: RawNode,
+  interactive: boolean,
+  searchableText: string[]
+): string[] {
   const actions = new Set<string>();
   const className = node.className;
 
-  if (interactive) actions.add("tap");
+  if (interactive && isLikelySemanticTapTarget(node, actionTarget, searchableText)) actions.add("tap");
   if (/ScrollView|TableView|CollectionView/i.test(className)) actions.add("scroll");
   if (/TextField|TextView/i.test(className)) actions.add("input");
   if (node.hostViewControllerOid || /Controller/i.test(className)) actions.add("dismiss");
   actions.add("invoke");
 
   return [...actions];
+}
+
+function isLikelySemanticTapTarget(
+  node: RawNode,
+  actionTarget: RawNode,
+  searchableText: string[]
+): boolean {
+  const className = node.className;
+  const targetClassName = actionTarget.className;
+  const hasActionableAncestor = (actionTarget.primaryOid ?? actionTarget.oid) !== (node.primaryOid ?? node.oid);
+
+  if (/Button|Control|Switch|Cell|Tab|Segment|ActionView/i.test(targetClassName)) return true;
+  if (/Button|Control|Switch|Cell|Tab|Segment|ActionView/i.test(className)) return true;
+  if (/Label/i.test(className) && searchableText.length > 0) return true;
+  if (/ImageView/i.test(className) && hasActionableAncestor) return true;
+  if (node.accessibilityIdentifier && !isGenericContainerClass(className)) return true;
+  if (/Card|Tile|Row/i.test(className) && searchableText.length > 0) return true;
+  return false;
+}
+
+function isGenericContainerClass(className: string): boolean {
+  return /LayoutContainer|Wrapper|Platter|Transition|ContainerView|ContentView|BackgroundView|VisualEffect/i.test(className);
 }
 
 function inferRole(node: RawNode, searchableText: string[], actions: string[], group?: UISnapshotGroup): string {
@@ -354,7 +384,7 @@ function shouldIncludeNode(node: UISnapshotNode, groupByActionOid: Map<number, U
   if (node.searchableText.length > 0) return true;
   if (node.accessibilityIdentifier) return true;
   if (node.controllerClass) return true;
-  if (/Button|Label|Image|ScrollView|TableView|CollectionView|TextField|TextView|Cell|Tab|Navigation/i.test(node.className)) return true;
+  if (/Button|Label|Image|ScrollView|TableView|CollectionView|TextField|TextView|Cell|Tab/i.test(node.className)) return true;
   return groupByActionOid.has(node.actionTargetOid);
 }
 

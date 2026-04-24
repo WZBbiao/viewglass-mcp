@@ -56,7 +56,12 @@ export async function uiWait(
   exec?: ExecFn
 ): Promise<UIWaitResult> {
   const session = await resolveSession(input.session, exec);
-  const resolved = await resolveQueryLocatorExpression(input.locator, session, exec);
+  const resolved = await resolveQueryLocatorExpression(
+    input.locator,
+    session,
+    exec,
+    input.mode === "appears" ? { fallback: "broad" } : undefined
+  );
   const timeoutArgs = input.timeout ? ["--timeout", String(input.timeout)] : [];
   const intervalArgs = input.intervalMs ? ["--interval-ms", String(input.intervalMs)] : [];
 

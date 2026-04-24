@@ -7,6 +7,19 @@ function makeExec(waitResult?: object): ExecFn {
     if (args.includes("list")) {
       return { stdout: JSON.stringify([{ bundleIdentifier: "com.test", port: 1234 }]), stderr: "" };
     }
+    if (args[0] === "hierarchy") {
+      return {
+        stdout: JSON.stringify({
+          appInfo: { appName: "FixtureApp", bundleIdentifier: "com.test", serverVersion: "0.1.0" },
+          fetchedAt: "2026-04-24T00:00:00Z",
+          screenScale: 3,
+          screenSize: { x: 0, y: 0, width: 390, height: 844 },
+          snapshotId: "snap-empty",
+          windows: [],
+        }),
+        stderr: "",
+      };
+    }
     // Simulate wait command output
     const result = waitResult ?? {
       met: true,
@@ -48,6 +61,15 @@ describe("uiWait - appears mode", () => {
     const result = await uiWait({ mode: "appears", locator: "#foo", session: "com.test@1234" }, exec);
     expect(result.met).toBe(true);
     expect(result.pollCount).toBe(2);
+  });
+
+  it("uses a broad fallback for future plain locators", async () => {
+    const exec = makeExec() as ReturnType<typeof vi.fn>;
+    await uiWait({ mode: "appears", locator: "GameDetailV2ViewController", session: "com.test@1234" }, exec);
+    const waitCalls = (exec.mock.calls as [string, string[]][]).filter((c) => c[1][0] === "wait");
+    expect(waitCalls[0][1][2]).toBe(
+      '(#GameDetailV2ViewController OR contains:"GameDetailV2ViewController" OR GameDetailV2ViewController)'
+    );
   });
 });
 

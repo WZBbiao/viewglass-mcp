@@ -37,6 +37,9 @@ type SnapshotNode = {
   oid?: number | string;
   actionTargetOid?: number | string;
   className?: string;
+  controllerClass?: string | null;
+  controllerOid?: number | string | null;
+  actions?: unknown[];
   text?: string;
   searchableText?: unknown[];
   accessibilityIdentifier?: string | null;
@@ -209,12 +212,41 @@ async function resolveTapOid(
   throw new Error(`could not resolve oid for '${label}'`);
 }
 
+async function resolveNodeOid(client: MCPClient, label: string): Promise<string> {
+  const snapshot = await loadSnapshot(client);
+  const wanted = normalize(label);
+
+  for (const node of snapshot.nodes ?? []) {
+    const texts = snapshotNodeTexts(node);
+    if (texts.some((text) => normalize(text) === wanted)) {
+      const oid = asOid(node.oid);
+      if (oid) return oid;
+    }
+  }
+
+  throw new Error(`could not resolve node oid for '${label}'`);
+}
+
 async function resolveFirstOidByClass(
   client: MCPClient,
   className: string
 ): Promise<string> {
   const snapshot = await loadSnapshot(client, className);
-  for (const node of snapshot.nodes ?? []) {
+  const nodes = snapshot.nodes ?? [];
+  for (const node of nodes) {
+    if (node.controllerClass === className) {
+      const oid = asOid(node.controllerOid);
+      if (oid) return oid;
+    }
+  }
+  const candidates = nodes.filter((node) => node.className === className || node.className?.includes(className));
+  const ordered = candidates.length > 0 ? candidates : nodes;
+  ordered.sort((a, b) => {
+    const aTap = Array.isArray(a.actions) && a.actions.includes("tap") ? 0 : 1;
+    const bTap = Array.isArray(b.actions) && b.actions.includes("tap") ? 0 : 1;
+    return aTap - bTap;
+  });
+  for (const node of ordered) {
     const oid = asOid(node.actionTargetOid) ?? asOid(node.oid);
     if (oid) return oid;
   }
@@ -355,7 +387,7 @@ async function runE2E() {
     await test("tap table cell label triggers UITableViewCell selection", async () => {
       await client.callToolJSON("ui_tap", { oid: await resolveTapOid(client, "push_selectable_surfaces_screen"), session: SESSION });
       await client.callToolJSON("ui_tap", { oid: await resolveTapOid(client, "table_row_label_1"), session: SESSION });
-      const oid = await resolveTapOid(client, "selection_status");
+      const oid = await resolveNodeOid(client, "selection_status");
       const attrs = await client.callToolJSON<Record<string, unknown>>(
         "ui_attr_get", { oid, attrs: ["text", "displayText"], session: SESSION }
       );
@@ -367,7 +399,7 @@ async function runE2E() {
 
     await test("tap collection cell label triggers UICollectionViewCell selection", async () => {
       await client.callToolJSON("ui_tap", { oid: await resolveTapOid(client, "collection_tile_label_2"), session: SESSION });
-      const oid = await resolveTapOid(client, "selection_status");
+      const oid = await resolveNodeOid(client, "selection_status");
       const attrs = await client.callToolJSON<Record<string, unknown>>(
         "ui_attr_get", { oid, attrs: ["text", "displayText"], session: SESSION }
       );
@@ -381,11 +413,11 @@ async function runE2E() {
     // ─── ui_scroll ──────────────────────────────────────────────────────────
     console.log("\n[ ui_scroll ]");
     await resetToHome(client);
-    await client.callToolJSON("ui_tap", { oid: await resolveTapOid(client, "tab_feed"), session: SESSION });
+    await client.callToolJSON("ui_tap", { oid: await resolveTapOid(client, "switch_tab_feed"), session: SESSION });
     await new Promise((r) => setTimeout(r, 500));
 
     await test("scroll long_feed_scroll returns execution summary", async () => {
-      const oid = await resolveTapOid(client, "long_feed_scroll");
+      const oid = await resolveNodeOid(client, "long_feed_scroll");
       const data = await client.callToolJSON<{ ok?: boolean; oid?: string; direction?: string; distance?: number }>(
         "ui_scroll", { oid, direction: "down", distance: 200, session: SESSION }
       );
@@ -567,7 +599,7 @@ async function runE2E() {
     });
 
     await test("input text into primary_text_field returns execution summary", async () => {
-      const oid = await resolveTapOid(client, "primary_text_field");
+      const oid = await resolveNodeOid(client, "primary_text_field");
       const data = await client.callToolJSON<{ ok?: boolean; text?: string; oid?: string }>(
         "ui_input", { oid, text: "hello e2e", session: SESSION }
       );
@@ -584,7 +616,7 @@ async function runE2E() {
     // ─── ui_swipe ───────────────────────────────────────────────────────────
     console.log("\n[ ui_swipe ]");
     await resetToHome(client);
-    await client.callToolJSON("ui_tap", { oid: await resolveTapOid(client, "tab_feed"), session: SESSION });
+    await client.callToolJSON("ui_tap", { oid: await resolveTapOid(client, "switch_tab_feed"), session: SESSION });
     await new Promise((r) => setTimeout(r, 500));
 
     await test("swipe UIScrollView down returns ok:true with target/direction/distance", async () => {
