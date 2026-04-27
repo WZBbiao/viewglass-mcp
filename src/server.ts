@@ -555,6 +555,7 @@ server.registerTool(
   {
     description:
       "Capture a screenshot of the running app as a PNG image. " +
+      "Returns the saved path plus image metadata such as width and height. " +
       "Use ONLY for visual confirmation (e.g. verifying a UI change looks correct) " +
       "or side-by-side design comparison with compare_with_design. " +
       "Do NOT use this to find or inspect elements — screenshots have no OIDs and cannot " +

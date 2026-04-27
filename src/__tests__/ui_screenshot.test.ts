@@ -7,7 +7,13 @@ function makeExec(screenshotResult?: object): ExecFn {
     if (args.includes("list")) {
       return { stdout: JSON.stringify([{ bundleIdentifier: "com.test", port: 1234 }]), stderr: "" };
     }
-    const result = screenshotResult ?? { path: "/tmp/viewglass-screenshot-123.png" };
+    const result = screenshotResult ?? {
+      path: "/tmp/viewglass-screenshot-123.png",
+      width: 1170,
+      height: 2532,
+      dataSize: 12345,
+      screenshotType: "screen",
+    };
     return { stdout: JSON.stringify(result), stderr: "" };
   });
 }
@@ -28,9 +34,12 @@ describe("uiScreenshot - full screen", () => {
   });
 
   it("returns path from CLI output", async () => {
-    const exec = makeExec({ path: "/tmp/test.png" });
+    const exec = makeExec({ path: "/tmp/test.png", width: 1170, height: 2532, screenshotType: "screen" });
     const result = await uiScreenshot({ session: "com.test@1234" }, exec);
     expect(result.path).toBe("/tmp/test.png");
+    expect(result.width).toBe(1170);
+    expect(result.height).toBe(2532);
+    expect(result.screenshotType).toBe("screen");
   });
 
   it("uses custom outputPath when provided", async () => {

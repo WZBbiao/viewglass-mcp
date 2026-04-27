@@ -240,7 +240,12 @@ async function resolveFirstOidByClass(
     }
   }
   const candidates = nodes.filter((node) => node.className === className || node.className?.includes(className));
-  const ordered = candidates.length > 0 ? candidates : nodes;
+  const usableCandidates = candidates.filter(
+    (node) =>
+      node.accessibilityIdentifier !== "debug_floating_avatar" &&
+      !String(node.controllerClass ?? "").includes("DebugFloatingViewController")
+  );
+  const ordered = usableCandidates.length > 0 ? usableCandidates : (candidates.length > 0 ? candidates : nodes);
   ordered.sort((a, b) => {
     const aTap = Array.isArray(a.actions) && a.actions.includes("tap") ? 0 : 1;
     const bTap = Array.isArray(b.actions) && b.actions.includes("tap") ? 0 : 1;
@@ -592,10 +597,13 @@ async function runE2E() {
     console.log("\n[ ui_screenshot ]");
     await resetToHome(client);
 
-    await test("full-screen screenshot returns path ending in .png", async () => {
-      const data = await client.callToolJSON<{ path?: string }>("ui_screenshot", { session: SESSION });
+    await test("full-screen screenshot returns path and full-screen dimensions", async () => {
+      const data = await client.callToolJSON<{ path?: string; width?: number; height?: number }>("ui_screenshot", { session: SESSION });
       if (!data.path) throw new Error("missing path");
       if (!data.path.endsWith(".png")) throw new Error(`expected .png path, got: ${data.path}`);
+      if ((data.width ?? 0) < 1000 || (data.height ?? 0) < 2000) {
+        throw new Error(`expected full-screen screenshot dimensions, got ${data.width}x${data.height}`);
+      }
     });
 
     await test("node screenshot of push_buttons_screen returns path and locator", async () => {

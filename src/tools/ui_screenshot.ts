@@ -24,6 +24,14 @@ export interface UIScreenshotResult {
   path: string;
   /** Locator used (if capturing a specific node). */
   locator?: string;
+  /** Pixel width reported by the Viewglass CLI, when available. */
+  width?: number;
+  /** Pixel height reported by the Viewglass CLI, when available. */
+  height?: number;
+  /** Encoded image byte size reported by the Viewglass CLI, when available. */
+  dataSize?: number;
+  /** Screenshot type reported by the Viewglass CLI. */
+  screenshotType?: string;
 }
 
 /**
@@ -52,8 +60,23 @@ export async function uiScreenshot(
   }
 
   const { stdout } = await runCLI(cliArgs, { session, exec });
-  const raw = parseJSON<{ path?: string; outputPath?: string; filePath?: string }>(stdout, "ui_screenshot");
+  const raw = parseJSON<{
+    path?: string;
+    outputPath?: string;
+    filePath?: string;
+    width?: number;
+    height?: number;
+    dataSize?: number;
+    screenshotType?: string;
+  }>(stdout, "ui_screenshot");
   const savedPath: string = raw.path ?? raw.filePath ?? raw.outputPath ?? outputPath;
 
-  return { path: savedPath, locator: input.locator };
+  return {
+    path: savedPath,
+    locator: input.locator,
+    width: raw.width,
+    height: raw.height,
+    dataSize: raw.dataSize,
+    screenshotType: raw.screenshotType,
+  };
 }
