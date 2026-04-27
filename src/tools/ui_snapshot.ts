@@ -9,11 +9,20 @@ export interface UISnapshotInput {
   /** Filter hierarchy to nodes of this UIKit class name or query expression. */
   filter?: string;
   /**
+   * Maximum nodes returned in compact mode. Default: 80 without filter, 160
+   * with filter. Set to 0 to return the full compact node index.
+   */
+  maxNodes?: number;
+  /**
    * When false, include the full rawTree hierarchy in the response.
    * Default: true (agent-first compact index + summary, without rawTree).
    */
   compact?: boolean;
 }
+
+const DEFAULT_COMPACT_NODE_LIMIT = 80;
+const FILTERED_COMPACT_NODE_LIMIT = 160;
+const MAX_NAVIGATION_CANDIDATES = 16;
 
 interface RawRect {
   x: number;
@@ -128,6 +137,7 @@ interface UISnapshotSummary {
   visibleText: string[];
   interactiveNodeCount: number;
   controllerHints: string[];
+  navigationCandidates?: UISnapshotNavigationCandidate[];
   bottomBarCandidates: Array<{
     groupId: string;
     className?: string;
@@ -137,6 +147,17 @@ interface UISnapshotSummary {
     frame: RawRect;
   }>;
   groupCount: number;
+}
+
+interface UISnapshotNavigationCandidate {
+  oid: number;
+  actionTargetOid: number;
+  label?: string;
+  accessibilityIdentifier?: string | null;
+  className: string;
+  role: string;
+  areaHint: string;
+  frame: RawRect;
 }
 
 export interface UISnapshotOutput {
@@ -153,6 +174,10 @@ export interface UISnapshotOutput {
     fetchedAt: string;
     screenScale: number;
     screenSize: RawRect;
+    totalNodeCount?: number;
+    returnedNodeCount?: number;
+    nodeLimit?: number;
+    truncated?: boolean;
   };
   summary: UISnapshotSummary;
   groups: UISnapshotGroup[];
@@ -179,10 +204,19 @@ export async function uiSnapshot(
   if (input.filter) args.push("--filter", input.filter);
   const { stdout } = await runCLI(args, { session, exec });
   const hierarchy = parseJSON<RawHierarchy>(stdout, "ui_snapshot");
-  return buildAgentSnapshot(hierarchy, session, input.compact !== false);
+  const compact = input.compact !== false;
+  const maxNodes = compact
+    ? input.maxNodes ?? (input.filter ? FILTERED_COMPACT_NODE_LIMIT : DEFAULT_COMPACT_NODE_LIMIT)
+    : 0;
+  return buildAgentSnapshot(hierarchy, session, compact, maxNodes);
 }
 
-function buildAgentSnapshot(hierarchy: RawHierarchy, session: string, compact: boolean): UISnapshotOutput {
+function buildAgentSnapshot(
+  hierarchy: RawHierarchy,
+  session: string,
+  compact: boolean,
+  maxNodes: number
+): UISnapshotOutput {
   const rawNodes = flattenTrees(hierarchy.windows);
   const nodesByOid = new Map(rawNodes.map((node) => [node.oid, node]));
   const actionTargetByOid = new Map<number, number>();
@@ -199,12 +233,14 @@ function buildAgentSnapshot(hierarchy: RawHierarchy, session: string, compact: b
     }
   }
 
-  const nodes = rawNodes
+  const allNodes = rawNodes
     .map((node) => buildSnapshotNode(node, nodesByOid, actionTargetByOid, groupByActionOid))
+    .map((node) => promoteNavigationTapTarget(node, hierarchy.screenSize))
     .filter((node) => shouldIncludeNode(node, groupByActionOid))
     .sort(sortNodes);
 
-  const summary = buildSummary(hierarchy, nodes, groups);
+  const nodes = applyNodeBudget(allNodes, groups, hierarchy.screenSize, maxNodes);
+  const summary = buildSummary(hierarchy, allNodes, groups);
   const partial: UISnapshotOutput = {
     app: {
       appName: hierarchy.appInfo.appName,
@@ -219,6 +255,10 @@ function buildAgentSnapshot(hierarchy: RawHierarchy, session: string, compact: b
       fetchedAt: hierarchy.fetchedAt,
       screenScale: hierarchy.screenScale,
       screenSize: hierarchy.screenSize,
+      totalNodeCount: allNodes.length,
+      returnedNodeCount: nodes.length,
+      nodeLimit: maxNodes > 0 ? maxNodes : undefined,
+      truncated: nodes.length < allNodes.length,
     },
     summary,
     groups,
@@ -226,7 +266,10 @@ function buildAgentSnapshot(hierarchy: RawHierarchy, session: string, compact: b
     matchedRecipes: [],
     rawTree: compact ? undefined : hierarchy,
   };
-  partial.matchedRecipes = matchProjectRecipes(partial, loadProjectRecipes());
+  partial.matchedRecipes = matchProjectRecipes(
+    { ...partial, nodes: allNodes, rawTree: undefined },
+    loadProjectRecipes()
+  );
 
   return partial;
 }
@@ -340,7 +383,6 @@ function inferActions(
   if (/ScrollView|TableView|CollectionView/i.test(className)) actions.add("scroll");
   if (/TextField|TextView/i.test(className)) actions.add("input");
   if (node.hostViewControllerOid || /Controller/i.test(className)) actions.add("dismiss");
-  actions.add("invoke");
 
   return [...actions];
 }
@@ -363,6 +405,42 @@ function isLikelySemanticTapTarget(
   return false;
 }
 
+function promoteNavigationTapTarget(node: UISnapshotNode, screenSize: RawRect): UISnapshotNode {
+  if (node.actions.includes("tap")) return node;
+  if (!node.visible || !node.interactive) return node;
+  if (!isEdgeNavigationArea(node.frame, screenSize)) return node;
+  if (!isReasonableNavigationTapFrame(node.frame, screenSize)) return node;
+  if (/Window|Controller|ScrollView|TableView|CollectionView|TabBar|NavigationBar|Toolbar/i.test(node.className)) return node;
+  if (/Label/i.test(node.className) && node.searchableText.length === 0) return node;
+
+  return {
+    ...node,
+    actions: dedupeStrings([...node.actions, "tap"]),
+    role: node.role === "node" ? "edgeTapTarget" : node.role,
+  };
+}
+
+function isEdgeNavigationArea(frame: RawRect, screenSize: RawRect): boolean {
+  if (!intersectsScreen(frame, screenSize)) return false;
+  const centerY = frame.y + frame.height / 2;
+  return centerY <= screenSize.height * 0.18 || centerY >= screenSize.height * 0.82;
+}
+
+function intersectsScreen(frame: RawRect, screenSize: RawRect): boolean {
+  const left = Math.max(frame.x, screenSize.x);
+  const right = Math.min(frame.x + frame.width, screenSize.x + screenSize.width);
+  const top = Math.max(frame.y, screenSize.y);
+  const bottom = Math.min(frame.y + frame.height, screenSize.y + screenSize.height);
+  return right > left && bottom > top;
+}
+
+function isReasonableNavigationTapFrame(frame: RawRect, screenSize: RawRect): boolean {
+  if (frame.width < 12 || frame.height < 12) return false;
+  if (frame.width > screenSize.width * 0.55) return false;
+  if (frame.height > screenSize.height * 0.18) return false;
+  return true;
+}
+
 function isGenericContainerClass(className: string): boolean {
   return /LayoutContainer|Wrapper|Platter|Transition|ContainerView|ContentView|BackgroundView|VisualEffect/i.test(className);
 }
@@ -383,6 +461,7 @@ function shouldIncludeNode(node: UISnapshotNode, groupByActionOid: Map<number, U
   if (node.groupId) return true;
   if (node.searchableText.length > 0) return true;
   if (node.accessibilityIdentifier) return true;
+  if (node.actions.includes("tap")) return true;
   if (node.controllerClass) return true;
   if (/Button|Label|Image|ScrollView|TableView|CollectionView|TextField|TextView|Cell|Tab/i.test(node.className)) return true;
   return groupByActionOid.has(node.actionTargetOid);
@@ -392,6 +471,62 @@ function sortNodes(a: UISnapshotNode, b: UISnapshotNode): number {
   if (a.frame.y !== b.frame.y) return a.frame.y - b.frame.y;
   if (a.frame.x !== b.frame.x) return a.frame.x - b.frame.x;
   return a.oid - b.oid;
+}
+
+function applyNodeBudget(
+  nodes: UISnapshotNode[],
+  groups: UISnapshotGroup[],
+  screenSize: RawRect,
+  maxNodes: number
+): UISnapshotNode[] {
+  if (maxNodes <= 0 || nodes.length <= maxNodes) return nodes;
+
+  const keep = new Set<number>();
+  for (const group of groups) {
+    for (const oid of group.itemOids) keep.add(oid);
+  }
+
+  const scored = nodes
+    .map((node) => ({
+      node,
+      score: scoreNodeForBudget(node, screenSize),
+    }))
+    .sort((a, b) => {
+      if (a.score !== b.score) return b.score - a.score;
+      return sortNodes(a.node, b.node);
+    });
+
+  for (const item of scored) {
+    if (keep.size >= maxNodes) break;
+    keep.add(item.node.oid);
+  }
+
+  return nodes.filter((node) => keep.has(node.oid)).sort(sortNodes);
+}
+
+function scoreNodeForBudget(node: UISnapshotNode, screenSize: RawRect): number {
+  let score = 0;
+  const area = node.frame.width * node.frame.height;
+
+  if (node.groupId) score += 140;
+  if (node.actions.includes("tap")) score += 110;
+  if (node.actions.includes("input")) score += 110;
+  if (node.actions.includes("scroll")) score += 45;
+  if (node.actions.includes("dismiss")) score += 25;
+  if (node.accessibilityIdentifier) score += 180;
+  if (node.searchableText.length > 0) score += 60;
+  if (node.text && node.text.length <= 24) score += 12;
+  if (node.controllerClass) score += 20;
+  if (isEdgeNavigationArea(node.frame, screenSize)) score += 35;
+  if (node.role === "button" || node.role === "switcherItem" || node.role === "tapTarget") score += 25;
+  if (node.role === "edgeTapTarget") score += 65;
+  if (/Button|Control|Cell|Tab|Segment/i.test(node.className)) score += 25;
+  if (/ImageView/i.test(node.className) && node.searchableText.length === 0) score -= 12;
+  if (isGenericContainerClass(node.className) && node.searchableText.length === 0) score -= 25;
+  if (area > screenSize.width * screenSize.height * 0.35 && node.searchableText.length === 0) score -= 35;
+  if (!intersectsScreen(node.frame, screenSize)) score -= 60;
+
+  return score;
 }
 
 function resolveActionTargetOid(node: RawNode, nodesByOid: Map<number, RawNode>): number {
@@ -640,6 +775,7 @@ function inferSelectedReason(
 function buildSummary(hierarchy: RawHierarchy, nodes: UISnapshotNode[], groups: UISnapshotGroup[]): UISnapshotSummary {
   const visibleText = dedupeStrings(nodes.flatMap((node) => node.searchableText)).slice(0, 40);
   const controllerHints = dedupeStrings(nodes.map((node) => node.controllerClass ?? undefined));
+  const navigationCandidates = buildNavigationCandidates(nodes, hierarchy.screenSize);
   const bottomBarCandidates = groups
     .filter((group) => group.role === "bottomNavigation")
     .map((group) => ({
@@ -655,7 +791,65 @@ function buildSummary(hierarchy: RawHierarchy, nodes: UISnapshotNode[], groups: 
     visibleText,
     interactiveNodeCount: nodes.filter((node) => node.interactive).length,
     controllerHints,
+    navigationCandidates,
     bottomBarCandidates,
     groupCount: groups.length,
   };
+}
+
+function buildNavigationCandidates(nodes: UISnapshotNode[], screenSize: RawRect): UISnapshotNavigationCandidate[] {
+  const bestByTarget = new Map<number, UISnapshotNode>();
+  for (const node of nodes) {
+    if (!node.actions.includes("tap")) continue;
+    if (!isEdgeNavigationArea(node.frame, screenSize) && !node.groupId) continue;
+
+    const existing = bestByTarget.get(node.actionTargetOid);
+    if (!existing || scoreNodeForBudget(node, screenSize) > scoreNodeForBudget(existing, screenSize)) {
+      bestByTarget.set(node.actionTargetOid, node);
+    }
+  }
+
+  return [...bestByTarget.values()]
+    .sort((a, b) => {
+      const scoreDelta = scoreNavigationCandidate(b, screenSize) - scoreNavigationCandidate(a, screenSize);
+      if (scoreDelta !== 0) return scoreDelta;
+      return sortNodes(a, b);
+    })
+    .slice(0, MAX_NAVIGATION_CANDIDATES)
+    .sort(sortNodes)
+    .map((node) => ({
+      oid: node.oid,
+      actionTargetOid: node.actionTargetOid,
+      label: node.text,
+      accessibilityIdentifier: node.accessibilityIdentifier,
+      className: node.className,
+      role: node.role,
+      areaHint: areaHintForFrame(node.frame, screenSize),
+      frame: node.frame,
+    }));
+}
+
+function scoreNavigationCandidate(node: UISnapshotNode, screenSize: RawRect): number {
+  let score = scoreNodeForBudget(node, screenSize);
+  const areaHint = areaHintForFrame(node.frame, screenSize);
+  if (areaHint === "topRight" || areaHint === "topLeft") score += 25;
+  if (node.text || node.accessibilityIdentifier) score += 20;
+  if (node.groupId) score += 30;
+  return score;
+}
+
+function areaHintForFrame(frame: RawRect, screenSize: RawRect): string {
+  const centerX = frame.x + frame.width / 2;
+  const centerY = frame.y + frame.height / 2;
+  const vertical = centerY <= screenSize.height * 0.25
+    ? "top"
+    : centerY >= screenSize.height * 0.75
+      ? "bottom"
+      : "middle";
+  const horizontal = centerX <= screenSize.width / 3
+    ? "Left"
+    : centerX >= (screenSize.width * 2) / 3
+      ? "Right"
+      : "Center";
+  return `${vertical}${horizontal}`;
 }

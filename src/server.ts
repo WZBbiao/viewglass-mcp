@@ -101,11 +101,14 @@ server.registerTool(
     description:
       "Capture the current UI as an agent-first snapshot. " +
       "The result includes app/session metadata, a summary, inferred switcher/navigation groups, " +
-      "a flattened node index with searchableText and actionTargetOid fields, and matched project-local recipes when available, so agents can " +
+      "navigationCandidates for top/bottom entry points, a budgeted flattened node index with searchableText and actionTargetOid fields, " +
+      "and matched project-local recipes when available, so agents can " +
       "find targets without guessing UIKit class names. " +
       "Best practice: for any navigation or custom UI task, call ui_snapshot first to understand the current page, " +
       "then use ui_tap with a concrete visible label or oid from the snapshot. " +
-      "Use filter to narrow to a specific class or locator. Set compact=false only when you also need rawTree.",
+      "If the target is a settings/profile-style icon without text, inspect summary.navigationCandidates by areaHint such as topRight. " +
+      "Use filter to narrow to a specific class or locator, or maxNodes=0 when you need the full compact index. " +
+      "Set compact=false only when you also need rawTree.",
     inputSchema: {
       session: sessionSchema,
       filter: z
@@ -118,14 +121,23 @@ server.registerTool(
         .describe(
           "Default: true. Returns agent-first summary/groups/nodes only. Set false to also include rawTree."
         ),
+      maxNodes: z
+        .number()
+        .int()
+        .min(0)
+        .max(500)
+        .optional()
+        .describe(
+          "Compact-mode node budget. Default: 80, or 160 when filter is set. Set 0 to return the full compact node index."
+        ),
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ session, filter, compact }) =>
-    withToolLogging("ui_snapshot", { session, filter, compact }, async () => {
+  async ({ session, filter, compact, maxNodes }) =>
+    withToolLogging("ui_snapshot", { session, filter, compact, maxNodes }, async () => {
       try {
-        const result = await uiSnapshot({ session, filter, compact });
-        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+        const result = await uiSnapshot({ session, filter, compact, maxNodes });
+        return { content: [{ type: "text", text: JSON.stringify(result) }] };
       } catch (e) {
         return { isError: true, content: [{ type: "text", text: String(e) }] };
       }

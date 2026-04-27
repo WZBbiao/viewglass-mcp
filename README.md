@@ -19,7 +19,7 @@ When ViewglassMCP starts normally, it now bootstraps itself automatically like `
 
 | Tool | Description |
 |---|---|
-| `ui_snapshot` | Capture an agent-first UI snapshot with summary, groups, searchable nodes, matched recipes, and optional rawTree. |
+| `ui_snapshot` | Capture an agent-first UI snapshot with summary, navigation candidates, budgeted searchable nodes, matched recipes, and optional rawTree. |
 | `ui_attr_get` | Get runtime attributes of a node by OID. |
 | `ui_tap` | Tap a node by exact `oid` from `ui_snapshot`. Supports UIControl, gesture-backed views, UITableViewCell, and UICollectionViewCell. |
 | `ui_scroll` | Scroll a scroll view by exact `oid` from `ui_snapshot` and return an execution summary. |
@@ -41,6 +41,8 @@ For page navigation, settings flows, tab switching, and custom UI:
 
 1. Start with `ui_snapshot`
    - Use it to understand the current page, visible labels, groups, and likely action targets.
+   - For textless settings/profile icons, inspect `summary.navigationCandidates` and `areaHint` such as `topRight`.
+   - Default snapshots are budgeted for agents; use `maxNodes=0` only when the target is missing from the compact index.
    - Treat it as the source of truth for "where am I right now?".
 2. Then use execution tools with exact `oid`
    - Extract the exact target `oid` from `ui_snapshot.groups` or `ui_snapshot.nodes`.

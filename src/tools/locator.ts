@@ -211,7 +211,7 @@ export async function resolveQueryLocatorExpression(
     };
   }
 
-  const snapshot = await uiSnapshot({ session, compact: true }, exec);
+  const snapshot = await uiSnapshot({ session, compact: true, maxNodes: 0 }, exec);
   const { exactAccessibility, exactText, containsText, classMatches } = classifySnapshotNodes(
     value,
     snapshot.nodes
@@ -267,7 +267,7 @@ export async function resolveUniqueNodeLocator(
     };
   }
 
-  const snapshot = await uiSnapshot({ session, compact: true }, exec);
+  const snapshot = await uiSnapshot({ session, compact: true, maxNodes: 0 }, exec);
   const { exactAccessibility, exactText, containsText, classMatches } = classifySnapshotNodes(
     value,
     snapshot.nodes
@@ -370,7 +370,7 @@ export async function resolveActionLocator(
     };
   }
 
-  const snapshot = await uiSnapshot({ session, compact: true }, exec);
+  const snapshot = await uiSnapshot({ session, compact: true, maxNodes: 0 }, exec);
   const actionNodes = snapshot.nodes.filter((node) => supportsAction(node.actions, action));
   const { exactAccessibility, exactText, containsText, classMatches } = classifySnapshotNodes(
     value,

@@ -250,6 +250,62 @@ const hierarchyFixture = {
   ],
 };
 
+function makeNoisyHierarchy(): any {
+  const hierarchy = JSON.parse(JSON.stringify(hierarchyFixture));
+  const contentTree = hierarchy.windows[0].children[0];
+
+  contentTree.node.childrenOids.push(50);
+  contentTree.children.push({
+    node: {
+      oid: 50,
+      primaryOid: 50,
+      oidType: "view",
+      className: "ProfileSettingsIconContainerView",
+      frame: { x: 342, y: 52, width: 32, height: 32 },
+      bounds: { x: 0, y: 0, width: 32, height: 32 },
+      isHidden: false,
+      alpha: 1,
+      isUserInteractionEnabled: true,
+      childrenOids: [],
+      parentOid: 10,
+      attributeGroups: [],
+    },
+    children: [],
+  });
+
+  for (let index = 0; index < 140; index += 1) {
+    const oid = 1000 + index;
+    contentTree.node.childrenOids.push(oid);
+    contentTree.children.push({
+      node: {
+        oid,
+        primaryOid: oid,
+        oidType: "view",
+        className: "UILabel",
+        frame: { x: 20, y: 120 + index * 18, width: 180, height: 16 },
+        bounds: { x: 0, y: 0, width: 180, height: 16 },
+        isHidden: false,
+        alpha: 1,
+        isUserInteractionEnabled: true,
+        childrenOids: [],
+        parentOid: 10,
+        customDisplayTitle: `Noise ${index}`,
+        attributeGroups: [
+          {
+            groupName: "viewglass_runtime",
+            attributes: [
+              { displayName: "displayText", value: { string: { _0: `Noise ${index}` } } },
+            ],
+          },
+        ],
+      },
+      children: [],
+    });
+  }
+
+  return hierarchy;
+}
+
 function makeExec(stdout: string, error?: Error): ExecFn {
   return vi.fn().mockImplementation(async (_bin: string, args: string[]) => {
     if (error) throw error;
@@ -313,6 +369,33 @@ describe("uiSnapshot", () => {
     expect(meLabel?.actionTargetOid).toBe(230);
     expect(meLabel?.groupId).toBe("group_bottom_1");
     expect(result.matchedRecipes).toEqual([]);
+  });
+
+  it("budgets compact nodes and surfaces unlabeled edge navigation candidates", async () => {
+    const exec = makeExec(JSON.stringify(makeNoisyHierarchy()));
+    const result = await uiSnapshot({ session: "com.test@1234" }, exec);
+
+    expect(result.snapshot.totalNodeCount).toBeGreaterThan(80);
+    expect(result.snapshot.returnedNodeCount).toBeLessThanOrEqual(80);
+    expect(result.snapshot.nodeLimit).toBe(80);
+    expect(result.snapshot.truncated).toBe(true);
+    expect(result.nodes.some((node) => node.actions.includes("invoke"))).toBe(false);
+
+    const settingsCandidate = result.summary.navigationCandidates?.find((item) => item.oid === 50);
+    expect(settingsCandidate).toEqual(
+      expect.objectContaining({
+        actionTargetOid: 50,
+        areaHint: "topRight",
+        role: "edgeTapTarget",
+      })
+    );
+
+    const settingsNode = result.nodes.find((node) => node.oid === 50);
+    expect(settingsNode?.actions).toContain("tap");
+
+    const fullResult = await uiSnapshot({ session: "com.test@1234", maxNodes: 0 }, exec);
+    expect(fullResult.snapshot.truncated).toBe(false);
+    expect(fullResult.nodes.length).toBeGreaterThan(result.nodes.length);
   });
 
   it("loads matched project recipes and resolves recommended oids", async () => {
