@@ -174,7 +174,8 @@ server.registerTool(
       "First call ui_snapshot, inspect groups/nodes, then pass the exact oid here. " +
       "Supports semantic taps on UIControl, UITapGestureRecognizer-backed views, " +
       "UITableViewCell, and UICollectionViewCell, including nested labels inside a cell. " +
-      "Returns { ok, oid }.",
+      "If semantic tap cannot find an actionable target, falls back to coordinate semantic hit-testing. " +
+      "Returns { ok, oid, strategyUsed }.",
     inputSchema: {
       oid: z
         .coerce

@@ -1,4 +1,4 @@
-import { runCLI, resolveSession } from "../runner.js";
+import { parseJSON, runCLI, resolveSession } from "../runner.js";
 import type { ExecFn } from "../runner.js";
 
 export interface UITapInput {
@@ -19,7 +19,7 @@ export interface UITapInput {
  * UITapGestureRecognizer-backed views, UITableViewCell, and
  * UICollectionViewCell selection flows.
  *
- * Returns { ok, oid }.
+ * Returns { ok, oid, strategyUsed }.
  */
 export async function uiTap(
   input: UITapInput,
@@ -27,14 +27,43 @@ export async function uiTap(
 ): Promise<{
   ok: true;
   oid: string;
+  strategyUsed: "semantic" | "coordinateSemantic" | string;
+  fallbackReason?: string;
+  point?: { x: number; y: number };
+  hitOid?: string;
+  hitClass?: string;
 }> {
   if (!input.oid || String(input.oid).trim() === "") {
     throw new Error("ui_tap requires an exact oid from ui_snapshot. First inspect ui_snapshot.groups/nodes, then pass that oid to ui_tap.");
   }
   const session = await resolveSession(input.session, exec);
-  await runCLI(["tap", input.oid], { session, exec });
-  return {
+  const result = await runCLI(["tap", input.oid, "--json"], { session, exec });
+  const action = parseJSON<{
+    strategyUsed?: string;
+    fallbackReason?: string;
+    pointX?: number;
+    pointY?: number;
+    hitOid?: number | string;
+    hitClass?: string;
+  }>(result.stdout, "tap");
+  const output: {
+    ok: true;
+    oid: string;
+    strategyUsed: string;
+    fallbackReason?: string;
+    point?: { x: number; y: number };
+    hitOid?: string;
+    hitClass?: string;
+  } = {
     ok: true,
     oid: input.oid,
+    strategyUsed: action.strategyUsed ?? "semantic",
   };
+  if (action.fallbackReason) output.fallbackReason = action.fallbackReason;
+  if (typeof action.pointX === "number" && typeof action.pointY === "number") {
+    output.point = { x: action.pointX, y: action.pointY };
+  }
+  if (action.hitOid !== undefined) output.hitOid = String(action.hitOid);
+  if (action.hitClass) output.hitClass = action.hitClass;
+  return output;
 }

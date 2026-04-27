@@ -410,6 +410,29 @@ async function runE2E() {
       await client.callToolJSON("ui_tap", { oid: await resolveFirstOidByClass(client, "_UIButtonBarButton"), session: SESSION });
     });
 
+    await test("tap generic wrapper falls back to coordinate semantic hit-test", async () => {
+      await resetToHome(client);
+      await client.callToolJSON("ui_tap", { oid: await resolveTapOid(client, "push_gestures_screen"), session: SESSION });
+      const wrapperOid = await resolveTapOid(client, "coordinate_fallback_wrapper");
+      const data = await client.callToolJSON<{ ok?: boolean; strategyUsed?: string; point?: { x: number; y: number }; hitClass?: string }>(
+        "ui_tap", { oid: wrapperOid, session: SESSION }
+      );
+      if (!data.ok || data.strategyUsed !== "coordinateSemantic") {
+        throw new Error(`unexpected coordinate fallback result: ${JSON.stringify(data)}`);
+      }
+      if (!data.point || typeof data.point.x !== "number" || typeof data.point.y !== "number") {
+        throw new Error(`missing coordinate point: ${JSON.stringify(data)}`);
+      }
+      const statusOid = await resolveNodeOid(client, "gesture_status");
+      const attrs = await client.callToolJSON<Record<string, unknown>>(
+        "ui_attr_get", { oid: statusOid, attrs: ["text", "displayText"], session: SESSION }
+      );
+      const text = String(attrs.text ?? attrs.displayText ?? "");
+      if (text !== "Coordinate fallback fired") {
+        throw new Error(`unexpected gesture status after coordinate fallback: ${text}`);
+      }
+    });
+
     // ─── ui_scroll ──────────────────────────────────────────────────────────
     console.log("\n[ ui_scroll ]");
     await resetToHome(client);
