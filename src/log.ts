@@ -26,6 +26,8 @@ const SPLIT_BY_SESSION =
   process.env.VIEWGLASS_MCP_LOG_SPLIT_BY_SESSION === "1" ||
   process.env.VIEWGLASS_MCP_LOG_SPLIT_BY_SESSION === "true";
 
+const DEFAULT_AGENT_TRACE_FILE = "/tmp/viewglass-agent-trace.jsonl";
+
 function sanitizeSessionForFile(session: string): string {
   return session.replace(/[^\w.@-]+/g, "_");
 }
@@ -128,6 +130,223 @@ export function logToolThrow(name: string, error: unknown, durationMs: number, s
     `[tool:error] name=${name}${session ? ` session=${session}` : ""} durationMs=${durationMs} error=${safeStringify(error)}`,
     session
   );
+}
+
+function envFlag(name: string): boolean {
+  return process.env[name] === "1" || process.env[name] === "true";
+}
+
+export function agentTraceEnabled(): boolean {
+  return envFlag("VIEWGLASS_MCP_AGENT_TRACE");
+}
+
+function agentTraceFullEnabled(): boolean {
+  return envFlag("VIEWGLASS_MCP_AGENT_TRACE_FULL");
+}
+
+export interface AgentTraceEvent {
+  event: string;
+  traceId?: string;
+  tool?: string;
+  session?: string;
+  durationMs?: number;
+  args?: unknown;
+  isError?: boolean;
+  response?: unknown;
+  error?: unknown;
+}
+
+export function logAgentTrace(event: AgentTraceEvent) {
+  if (!agentTraceEnabled()) return;
+  const line = JSON.stringify({
+    timestamp: new Date().toISOString(),
+    pid: process.pid,
+    ...event,
+  });
+  const filePath = process.env.VIEWGLASS_MCP_AGENT_TRACE_FILE ?? DEFAULT_AGENT_TRACE_FILE;
+  appendFileSync(filePath, `${line}\n`, "utf8");
+}
+
+interface ToolTextContent {
+  type: string;
+  text?: string;
+}
+
+interface ToolTraceResponse {
+  content: ToolTextContent[];
+  isError?: boolean;
+}
+
+interface SnapshotNodeLike {
+  oid?: number | string;
+  id?: string;
+  className?: string;
+  role?: string;
+  text?: string;
+  searchableText?: string[];
+  accessibilityIdentifier?: string | null;
+  visible?: boolean;
+  interactive?: boolean;
+  actionTargetOid?: number | string;
+  groupId?: string;
+  frame?: unknown;
+}
+
+interface SnapshotLike {
+  app?: unknown;
+  snapshot?: {
+    snapshotId?: string;
+    fetchedAt?: string;
+    screenScale?: number;
+    screenSize?: unknown;
+    totalNodeCount?: number;
+    returnedNodeCount?: number;
+    nodeLimit?: number;
+    truncated?: boolean;
+  };
+  summary?: {
+    visibleText?: string[];
+    interactiveNodeCount?: number;
+    controllerHints?: string[];
+    navigationCandidates?: unknown[];
+    bottomBarCandidates?: unknown[];
+    groupCount?: number;
+  };
+  groups?: Array<{
+    id?: string;
+    role?: string;
+    itemLabels?: string[];
+    selectedOid?: number | string | null;
+    selectedReason?: string;
+  }>;
+  nodes?: SnapshotNodeLike[];
+  matchedRecipes?: unknown[];
+}
+
+function tryParseJSON(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function limitArray<T>(values: T[] | undefined, limit: number): T[] | undefined {
+  if (!Array.isArray(values)) return undefined;
+  if (values.length <= limit) return values;
+  return [...values.slice(0, limit), `... ${values.length - limit} more` as T];
+}
+
+function summarizeSnapshot(parsed: SnapshotLike) {
+  const nodes = Array.isArray(parsed.nodes) ? parsed.nodes : [];
+  const nodeSample = nodes.slice(0, 20).map((node) => ({
+    oid: node.oid,
+    id: node.id,
+    className: node.className,
+    role: node.role,
+    text: node.text,
+    searchableText: node.searchableText,
+    accessibilityIdentifier: node.accessibilityIdentifier,
+    visible: node.visible,
+    interactive: node.interactive,
+    actionTargetOid: node.actionTargetOid,
+    groupId: node.groupId,
+    frame: node.frame,
+  }));
+
+  return {
+    app: parsed.app,
+    snapshot: parsed.snapshot,
+    summary: parsed.summary
+      ? {
+          visibleText: limitArray(parsed.summary.visibleText, 40),
+          interactiveNodeCount: parsed.summary.interactiveNodeCount,
+          controllerHints: parsed.summary.controllerHints,
+          navigationCandidates: limitArray(parsed.summary.navigationCandidates, 20),
+          bottomBarCandidates: limitArray(parsed.summary.bottomBarCandidates, 12),
+          groupCount: parsed.summary.groupCount,
+        }
+      : undefined,
+    groups: parsed.groups?.slice(0, 12).map((group) => ({
+      id: group.id,
+      role: group.role,
+      itemLabels: limitArray(group.itemLabels, 20),
+      selectedOid: group.selectedOid,
+      selectedReason: group.selectedReason,
+    })),
+    nodes: nodeSample,
+    nodesOmitted: Math.max(0, nodes.length - nodeSample.length),
+    matchedRecipeCount: Array.isArray(parsed.matchedRecipes) ? parsed.matchedRecipes.length : undefined,
+  };
+}
+
+function summarizeGenericObject(parsed: Record<string, unknown>) {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (typeof value === "string") {
+      out[key] = truncate(value, 500);
+    } else if (Array.isArray(value)) {
+      out[key] = value.length > 20 ? [...value.slice(0, 20), `... ${value.length - 20} more`] : value;
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+function summarizeParsedToolResult(toolName: string, parsed: unknown): unknown {
+  if (!isRecord(parsed)) return parsed;
+  if (toolName === "ui_snapshot") return summarizeSnapshot(parsed as SnapshotLike);
+  if (toolName === "ui_screenshot") {
+    return {
+      path: parsed.path,
+      locator: parsed.locator,
+      width: parsed.width,
+      height: parsed.height,
+      dataSize: parsed.dataSize,
+      screenshotType: parsed.screenshotType,
+    };
+  }
+  if (toolName === "ui_tap") {
+    return {
+      ok: parsed.ok,
+      oid: parsed.oid,
+      strategyUsed: parsed.strategyUsed,
+      fallbackReason: parsed.fallbackReason,
+      point: parsed.point,
+      hitOid: parsed.hitOid,
+      hitClass: parsed.hitClass,
+    };
+  }
+  if (toolName === "ui_invoke") {
+    return {
+      target: parsed.target,
+      selector: parsed.selector,
+      args: parsed.args,
+      returnValue: typeof parsed.returnValue === "string" ? truncate(parsed.returnValue, 500) : parsed.returnValue,
+    };
+  }
+  return summarizeGenericObject(parsed);
+}
+
+export function summarizeAgentToolResponse(toolName: string, response: ToolTraceResponse) {
+  const firstText = response.content[0]?.text;
+  const parsed = firstText ? tryParseJSON(firstText) : undefined;
+  return {
+    isError: response.isError === true,
+    contentTypes: response.content.map((item) => item.type),
+    firstTextBytes: firstText ? Buffer.byteLength(firstText, "utf8") : 0,
+    firstTextPreview:
+      firstText && (parsed === undefined || response.isError === true)
+        ? truncate(firstText, response.isError === true ? 1200 : 500)
+        : undefined,
+    parsed: parsed !== undefined ? summarizeParsedToolResult(toolName, parsed) : undefined,
+    fullText: agentTraceFullEnabled() ? firstText : undefined,
+  };
 }
 
 export function mcpLoggingEnabled(): boolean {

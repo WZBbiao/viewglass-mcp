@@ -31,7 +31,14 @@ import { uiInput } from "./tools/ui_input.js";
 import { uiSwipe } from "./tools/ui_swipe.js";
 import { uiLongPress } from "./tools/ui_long_press.js";
 import { uiDismiss } from "./tools/ui_dismiss.js";
-import { logToolFinish, logToolStart, logToolThrow, safeStringify } from "./log.js";
+import {
+  logAgentTrace,
+  logToolFinish,
+  logToolStart,
+  logToolThrow,
+  safeStringify,
+  summarizeAgentToolResponse,
+} from "./log.js";
 import { autoBootstrapForMcpStartup, ensureProjectBootstrapForUsage } from "./init.js";
 import { noteSuccessfulTool } from "./project_memory.js";
 
@@ -51,6 +58,8 @@ type ToolResponse = {
   isError?: boolean;
 };
 
+let toolCallSequence = 0;
+
 function summarizeToolResponse(response: ToolResponse) {
   return {
     isError: response.isError === true,
@@ -66,13 +75,16 @@ async function withToolLogging<TArgs extends object>(
 ): Promise<ToolResponse> {
   ensureProjectBootstrapForUsage();
   const startedAt = Date.now();
+  const traceId = `${process.pid}-${Date.now()}-${++toolCallSequence}`;
   const session =
     "session" in args && typeof (args as { session?: unknown }).session === "string"
       ? ((args as { session?: string }).session ?? undefined)
       : undefined;
   logToolStart(name, args);
+  logAgentTrace({ event: "tool:start", traceId, tool: name, session, args });
   try {
     const result = await run();
+    const durationMs = Date.now() - startedAt;
     const parsedFirstText = (() => {
       const firstText = result.content[0]?.text;
       if (!firstText || result.isError === true) return undefined;
@@ -85,10 +97,31 @@ async function withToolLogging<TArgs extends object>(
     if (parsedFirstText !== undefined) {
       noteSuccessfulTool(name, args, parsedFirstText);
     }
-    logToolFinish(name, summarizeToolResponse(result), Date.now() - startedAt, session);
+    logToolFinish(name, summarizeToolResponse(result), durationMs, session);
+    logAgentTrace({
+      event: "tool:end",
+      traceId,
+      tool: name,
+      session,
+      durationMs,
+      args,
+      isError: result.isError === true,
+      response: summarizeAgentToolResponse(name, result),
+    });
     return result;
   } catch (error: unknown) {
-    logToolThrow(name, error, Date.now() - startedAt, session);
+    const durationMs = Date.now() - startedAt;
+    logToolThrow(name, error, durationMs, session);
+    logAgentTrace({
+      event: "tool:throw",
+      traceId,
+      tool: name,
+      session,
+      durationMs,
+      args,
+      isError: true,
+      error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : safeStringify(error, 1200),
+    });
     throw error;
   }
 }
