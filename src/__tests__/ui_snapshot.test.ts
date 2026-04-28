@@ -102,7 +102,7 @@ const hierarchyFixture = {
                 primaryOid: 210,
                 oidType: "view",
                 className: "UIButton",
-                frame: { x: 30, y: 770, width: 80, height: 58 },
+                frame: { x: 30, y: 9, width: 80, height: 58 },
                 bounds: { x: 0, y: 0, width: 80, height: 58 },
                 isHidden: false,
                 alpha: 1,
@@ -118,7 +118,7 @@ const hierarchyFixture = {
                     primaryOid: 211,
                     oidType: "view",
                     className: "UILabel",
-                    frame: { x: 37, y: 805, width: 20, height: 12 },
+                    frame: { x: 7, y: 35, width: 20, height: 12 },
                     bounds: { x: 0, y: 0, width: 20, height: 12 },
                     isHidden: false,
                     alpha: 1,
@@ -145,7 +145,7 @@ const hierarchyFixture = {
                 primaryOid: 220,
                 oidType: "view",
                 className: "UIButton",
-                frame: { x: 160, y: 770, width: 80, height: 58 },
+                frame: { x: 160, y: 9, width: 80, height: 58 },
                 bounds: { x: 0, y: 0, width: 80, height: 58 },
                 isHidden: false,
                 alpha: 1,
@@ -161,7 +161,7 @@ const hierarchyFixture = {
                     primaryOid: 221,
                     oidType: "view",
                     className: "UILabel",
-                    frame: { x: 172, y: 805, width: 30, height: 12 },
+                    frame: { x: 12, y: 35, width: 30, height: 12 },
                     bounds: { x: 0, y: 0, width: 30, height: 12 },
                     isHidden: false,
                     alpha: 1,
@@ -188,7 +188,7 @@ const hierarchyFixture = {
                 primaryOid: 230,
                 oidType: "view",
                 className: "_UITabButton",
-                frame: { x: 280, y: 770, width: 80, height: 58 },
+                frame: { x: 280, y: 9, width: 80, height: 58 },
                 bounds: { x: 0, y: 0, width: 80, height: 58 },
                 isHidden: false,
                 alpha: 1,
@@ -204,7 +204,7 @@ const hierarchyFixture = {
                     primaryOid: 231,
                     oidType: "view",
                     className: "_UITabBarSelectedContentView",
-                    frame: { x: 288, y: 782, width: 64, height: 34 },
+                    frame: { x: 8, y: 12, width: 64, height: 34 },
                     bounds: { x: 0, y: 0, width: 64, height: 34 },
                     isHidden: false,
                     alpha: 1,
@@ -220,7 +220,7 @@ const hierarchyFixture = {
                         primaryOid: 232,
                         oidType: "view",
                         className: "UILabel",
-                        frame: { x: 300, y: 805, width: 20, height: 12 },
+                        frame: { x: 12, y: 23, width: 20, height: 12 },
                         bounds: { x: 0, y: 0, width: 20, height: 12 },
                         isHidden: false,
                         alpha: 1,
@@ -302,6 +302,50 @@ function makeNoisyHierarchy(): any {
       children: [],
     });
   }
+
+  return hierarchy;
+}
+
+function makeNestedActionHierarchy(): any {
+  const hierarchy = JSON.parse(JSON.stringify(hierarchyFixture));
+  const contentTree = hierarchy.windows[0].children[0];
+  contentTree.node.childrenOids.push(300);
+  contentTree.children.push({
+    node: {
+      oid: 300,
+      primaryOid: 300,
+      oidType: "view",
+      className: "UIView",
+      frame: { x: 40, y: 300, width: 180, height: 80 },
+      bounds: { x: 0, y: 0, width: 180, height: 80 },
+      isHidden: false,
+      alpha: 1,
+      isUserInteractionEnabled: true,
+      childrenOids: [301],
+      parentOid: 10,
+      attributeGroups: [],
+    },
+    children: [
+      {
+        node: {
+          oid: 301,
+          primaryOid: 301,
+          oidType: "view",
+          className: "UIButton",
+          frame: { x: 10, y: 20, width: 120, height: 44 },
+          bounds: { x: 0, y: 0, width: 120, height: 44 },
+          isHidden: false,
+          alpha: 1,
+          isUserInteractionEnabled: true,
+          childrenOids: [],
+          parentOid: 300,
+          customDisplayTitle: "Create Post",
+          attributeGroups: [],
+        },
+        children: [],
+      },
+    ],
+  });
 
   return hierarchy;
 }
@@ -396,6 +440,23 @@ describe("uiSnapshot", () => {
     const fullResult = await uiSnapshot({ session: "com.test@1234", maxNodes: 0 }, exec);
     expect(fullResult.snapshot.truncated).toBe(false);
     expect(fullResult.nodes.length).toBeGreaterThan(result.nodes.length);
+  });
+
+  it("normalizes local frames to screen coordinates and surfaces primary actions", async () => {
+    const exec = makeExec(JSON.stringify(makeNestedActionHierarchy()));
+    const result = await uiSnapshot({ session: "com.test@1234", maxNodes: 0 }, exec);
+
+    const createPost = result.nodes.find((node) => node.oid === 301);
+    expect(createPost?.frame).toEqual({ x: 50, y: 320, width: 120, height: 44 });
+
+    const candidate = result.summary.navigationCandidates?.find((item) => item.oid === 301);
+    expect(candidate).toEqual(
+      expect.objectContaining({
+        actionTargetOid: 301,
+        areaHint: "middleLeft",
+        label: "Create Post",
+      })
+    );
   });
 
   it("loads matched project recipes and resolves recommended oids", async () => {

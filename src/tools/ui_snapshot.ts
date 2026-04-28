@@ -276,9 +276,20 @@ function buildAgentSnapshot(
 
 function flattenTrees(trees: RawTree[]): RawNode[] {
   const result: RawNode[] = [];
-  const walk = (tree: RawTree) => {
-    result.push(tree.node);
-    for (const child of tree.children ?? []) walk(child);
+  const walk = (tree: RawTree, parent?: RawNode) => {
+    const node = parent
+      ? {
+          ...tree.node,
+          frame: {
+            x: parent.frame.x + tree.node.frame.x - (parent.bounds?.x ?? 0),
+            y: parent.frame.y + tree.node.frame.y - (parent.bounds?.y ?? 0),
+            width: tree.node.frame.width,
+            height: tree.node.frame.height,
+          },
+        }
+      : { ...tree.node, frame: { ...tree.node.frame } };
+    result.push(node);
+    for (const child of tree.children ?? []) walk(child, node);
   };
   for (const tree of trees) walk(tree);
   return result;
@@ -509,6 +520,7 @@ function scoreNodeForBudget(node: UISnapshotNode, screenSize: RawRect): number {
   const area = node.frame.width * node.frame.height;
 
   if (node.groupId) score += 140;
+  if (isHighValueActionNode(node)) score += 180;
   if (node.actions.includes("tap")) score += 110;
   if (node.actions.includes("input")) score += 110;
   if (node.actions.includes("scroll")) score += 45;
@@ -606,11 +618,12 @@ function buildSwitcherGroups(
         (actionTarget.isHidden ?? false) === false &&
         (actionTarget.alpha ?? 1) > 0 &&
         actionTarget.frame.width > 0 &&
-        actionTarget.frame.height > 0;
+        actionTarget.frame.height > 0 &&
+        intersectsScreen(actionTarget.frame, screenSize);
       const actionTargetActionable =
         Boolean(actionTarget.isUserInteractionEnabled) ||
         /Button|Cell|Tab|Segment|Control/i.test(actionTarget.className);
-      return actionTargetVisible && actionTargetActionable;
+      return actionTargetVisible && actionTargetActionable && isLikelyGroupItemTarget(actionTarget, screenSize);
     })
     .map((node) => {
       const actionOid = actionTargetByOid.get(node.oid) ?? node.primaryOid ?? node.oid;
@@ -638,25 +651,31 @@ function buildSwitcherGroups(
   }
 
   const bottomTargets = dedupeGroupItems([...uniqueTargets.values()])
-    .filter(({ target, texts }) => texts.length > 0 && target.frame.y >= screenSize.height * 0.7)
+    .filter(({ target, texts }) => texts.length > 0 && intersectsScreen(target.frame, screenSize) && target.frame.y >= screenSize.height * 0.7)
     .sort((a, b) => a.target.frame.x - b.target.frame.x);
 
   const groups: UISnapshotGroup[] = [];
   if (bottomTargets.length >= 2) {
     const group = makeGroup("group_bottom_1", "bottomNavigation", bottomTargets);
-    if (group) groups.push(group);
+    if (group && isReasonableSwitcherGroup(group, screenSize)) groups.push(group);
   }
 
   const topTargets = dedupeGroupItems([...uniqueTargets.values()])
-    .filter(({ target, texts }) => texts.length > 0 && target.frame.y <= screenSize.height * 0.25)
+    .filter(({ target, texts }) => texts.length > 0 && intersectsScreen(target.frame, screenSize) && target.frame.y <= screenSize.height * 0.25)
     .sort((a, b) => a.target.frame.x - b.target.frame.x);
 
   if (topTargets.length >= 2) {
     const group = makeGroup("group_top_1", "topSwitcher", topTargets);
-    if (group) groups.push(group);
+    if (group && isReasonableSwitcherGroup(group, screenSize)) groups.push(group);
   }
 
   return groups;
+}
+
+function isReasonableSwitcherGroup(group: UISnapshotGroup, screenSize: RawRect): boolean {
+  if (group.role === "topSwitcher" && group.frame.height > screenSize.height * 0.12) return false;
+  if (group.role === "bottomNavigation" && group.frame.height > screenSize.height * 0.18) return false;
+  return true;
 }
 
 function makeGroup(
@@ -751,6 +770,20 @@ function shouldReplaceGroupCandidate(
   return false;
 }
 
+function isLikelyGroupItemTarget(target: RawNode, screenSize: RawRect): boolean {
+  const className = target.className;
+  if (!intersectsScreen(target.frame, screenSize)) return false;
+  if (target.frame.width <= 0 || target.frame.height <= 0) return false;
+
+  const looksLikeLeafAction = /Button|Cell|Segment|Control|ActionView/i.test(className);
+  const looksLikeContainer = /Window|NavigationBar|Toolbar|TabBar$|ScrollView|TableView|CollectionView|Controller|LayoutContainer|Transition|ContainerView|ContentView/i.test(className);
+  if (looksLikeContainer && !looksLikeLeafAction) return false;
+
+  if (target.frame.width > screenSize.width * 0.72 && !/Cell/i.test(className)) return false;
+  if (target.frame.height > screenSize.height * 0.2 && !/Cell/i.test(className)) return false;
+  return true;
+}
+
 function inferSelectedReason(
   source: RawNode,
   target: RawNode,
@@ -801,7 +834,8 @@ function buildNavigationCandidates(nodes: UISnapshotNode[], screenSize: RawRect)
   const bestByTarget = new Map<number, UISnapshotNode>();
   for (const node of nodes) {
     if (!node.actions.includes("tap")) continue;
-    if (!isEdgeNavigationArea(node.frame, screenSize) && !node.groupId) continue;
+    if (!isEdgeNavigationArea(node.frame, screenSize) && !node.groupId && !isHighValueActionNode(node)) continue;
+    if (shouldSkipNavigationCandidate(node, screenSize)) continue;
 
     const existing = bestByTarget.get(node.actionTargetOid);
     if (!existing || scoreNodeForBudget(node, screenSize) > scoreNodeForBudget(existing, screenSize)) {
@@ -833,9 +867,31 @@ function scoreNavigationCandidate(node: UISnapshotNode, screenSize: RawRect): nu
   let score = scoreNodeForBudget(node, screenSize);
   const areaHint = areaHintForFrame(node.frame, screenSize);
   if (areaHint === "topRight" || areaHint === "topLeft") score += 25;
+  if (isHighValueActionNode(node)) score += 120;
   if (node.text || node.accessibilityIdentifier) score += 20;
   if (node.groupId) score += 30;
   return score;
+}
+
+function shouldSkipNavigationCandidate(node: UISnapshotNode, screenSize: RawRect): boolean {
+  if (isHighValueActionNode(node)) return false;
+  if (!node.groupId && node.frame.width > screenSize.width * 0.72 && node.frame.height > 80) return true;
+  if (/NavigationBar|Toolbar/i.test(node.className) && node.frame.width > screenSize.width * 0.7) return true;
+  if (/TabBar$/i.test(node.className) && node.frame.width > screenSize.width * 0.7) return true;
+  if (/Window|Controller|LayoutContainer|Transition/i.test(node.className)) return true;
+  if (/ContainerView/i.test(node.className) && (node.frame.width > screenSize.width * 0.7 || node.frame.height > screenSize.height * 0.2)) {
+    return true;
+  }
+  return false;
+}
+
+function isHighValueActionNode(node: UISnapshotNode): boolean {
+  if (!node.actions.includes("tap")) return false;
+  return node.searchableText.some((text) =>
+    /^(create post|publish|send|submit|save|done|next|continue|review|post now|发布|发表|发帖|发送|提交|保存|完成|下一步|继续)$/.test(
+      text.trim().toLocaleLowerCase()
+    )
+  );
 }
 
 function areaHintForFrame(frame: RawRect, screenSize: RawRect): string {
