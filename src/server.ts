@@ -220,7 +220,7 @@ server.registerTool(
       "Supports semantic taps on UIControl, UITapGestureRecognizer-backed views, " +
       "UITableViewCell, and UICollectionViewCell, including nested labels inside a cell. " +
       "If semantic tap cannot find an actionable target, falls back to coordinate semantic hit-testing. " +
-      "Returns { ok, oid, strategyUsed }.",
+      "Returns { ok, oid, strategyUsed, detail, targetClass } so agents can verify which action actually fired.",
     inputSchema: {
       oid: z
         .coerce

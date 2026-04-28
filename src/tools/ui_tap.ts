@@ -14,12 +14,12 @@ export interface UITapInput {
 }
 
 /**
- * Tap a UI element and return an execution summary only.
+ * Tap a UI element and return an execution summary.
  * Semantic taps currently cover UIControl,
  * UITapGestureRecognizer-backed views, UITableViewCell, and
  * UICollectionViewCell selection flows.
  *
- * Returns { ok, oid, strategyUsed }.
+ * Returns { ok, oid, strategyUsed } plus diagnostic details from the CLI.
  */
 export async function uiTap(
   input: UITapInput,
@@ -28,6 +28,10 @@ export async function uiTap(
   ok: true;
   oid: string;
   strategyUsed: "semantic" | "coordinateSemantic" | string;
+  action?: string;
+  targetClass?: string;
+  mode?: string;
+  detail?: string;
   fallbackReason?: string;
   point?: { x: number; y: number };
   hitOid?: string;
@@ -40,6 +44,10 @@ export async function uiTap(
   const result = await runCLI(["tap", input.oid, "--json"], { session, exec });
   const action = parseJSON<{
     strategyUsed?: string;
+    action?: string;
+    targetClass?: string;
+    mode?: string;
+    detail?: string;
     fallbackReason?: string;
     pointX?: number;
     pointY?: number;
@@ -50,6 +58,10 @@ export async function uiTap(
     ok: true;
     oid: string;
     strategyUsed: string;
+    action?: string;
+    targetClass?: string;
+    mode?: string;
+    detail?: string;
     fallbackReason?: string;
     point?: { x: number; y: number };
     hitOid?: string;
@@ -59,6 +71,10 @@ export async function uiTap(
     oid: input.oid,
     strategyUsed: action.strategyUsed ?? "semantic",
   };
+  if (action.action) output.action = action.action;
+  if (action.targetClass) output.targetClass = action.targetClass;
+  if (action.mode) output.mode = action.mode;
+  if (action.detail) output.detail = action.detail;
   if (action.fallbackReason) output.fallbackReason = action.fallbackReason;
   if (typeof action.pointX === "number" && typeof action.pointY === "number") {
     output.point = { x: action.pointX, y: action.pointY };

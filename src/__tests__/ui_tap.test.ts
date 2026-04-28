@@ -4,7 +4,7 @@ import type { ExecFn } from "../runner.js";
 
 function makeExec(): ExecFn {
   return vi.fn().mockImplementation(async (_bin: string, args: string[]) => {
-    return { stdout: JSON.stringify({ success: true, strategyUsed: "semantic" }), stderr: "" };
+    return { stdout: JSON.stringify({ success: true, action: "tap", targetClass: "UIButton", mode: "semantic", detail: "Triggered UIControlEventTouchUpInside", strategyUsed: "semantic" }), stderr: "" };
   });
 }
 
@@ -18,12 +18,16 @@ describe("uiTap", () => {
     expect(tapCall?.[1]).toEqual(["tap", "42", "--json", "--session", "com.test@1234"]);
   });
 
-  it("returns execution summary only", async () => {
+  it("returns execution summary and diagnostics", async () => {
     const exec = makeExec();
     const result = await uiTap({ oid: "42", session: "com.test@1234" }, exec);
     expect(result.ok).toBe(true);
     expect(result.oid).toBe("42");
     expect(result.strategyUsed).toBe("semantic");
+    expect(result.action).toBe("tap");
+    expect(result.targetClass).toBe("UIButton");
+    expect(result.mode).toBe("semantic");
+    expect(result.detail).toContain("UIControlEventTouchUpInside");
   });
 
   it("returns coordinate semantic fallback details", async () => {
