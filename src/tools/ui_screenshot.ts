@@ -32,6 +32,16 @@ export interface UIScreenshotResult {
   dataSize?: number;
   /** Screenshot type reported by the Viewglass CLI. */
   screenshotType?: string;
+  /** Capture provider used by the Viewglass CLI, e.g. simctl/server/pymobiledevice3. */
+  captureProvider?: string;
+  /** Why the CLI fell back to another provider, when applicable. */
+  fallbackReason?: string;
+  /** Quality warnings such as mostlyBlack or suspiciousSmallEncodedImage. */
+  qualityWarnings?: string[];
+  /** Approximate sampled black pixel ratio, when available. */
+  blackPixelRatio?: number;
+  /** Approximate sampled visible/non-black pixel ratio, when available. */
+  nonBlackPixelRatio?: number;
 }
 
 /**
@@ -68,6 +78,11 @@ export async function uiScreenshot(
     height?: number;
     dataSize?: number;
     screenshotType?: string;
+    captureProvider?: string;
+    fallbackReason?: string;
+    qualityWarnings?: string[];
+    blackPixelRatio?: number;
+    nonBlackPixelRatio?: number;
   }>(stdout, "ui_screenshot");
   const savedPath: string = raw.path ?? raw.filePath ?? raw.outputPath ?? outputPath;
 
@@ -78,5 +93,10 @@ export async function uiScreenshot(
     height: raw.height,
     dataSize: raw.dataSize,
     screenshotType: raw.screenshotType,
+    captureProvider: raw.captureProvider,
+    fallbackReason: raw.fallbackReason,
+    qualityWarnings: raw.qualityWarnings,
+    blackPixelRatio: raw.blackPixelRatio,
+    nonBlackPixelRatio: raw.nonBlackPixelRatio,
   };
 }

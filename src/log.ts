@@ -309,6 +309,11 @@ function summarizeParsedToolResult(toolName: string, parsed: unknown): unknown {
       height: parsed.height,
       dataSize: parsed.dataSize,
       screenshotType: parsed.screenshotType,
+      captureProvider: parsed.captureProvider,
+      fallbackReason: parsed.fallbackReason,
+      qualityWarnings: parsed.qualityWarnings,
+      blackPixelRatio: parsed.blackPixelRatio,
+      nonBlackPixelRatio: parsed.nonBlackPixelRatio,
     };
   }
   if (toolName === "ui_tap") {

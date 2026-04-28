@@ -47,6 +47,10 @@ describe("agent trace", () => {
             height: 2532,
             dataSize: 42536,
             screenshotType: "screen",
+            captureProvider: "server",
+            qualityWarnings: ["mostlyBlack"],
+            blackPixelRatio: 0.99,
+            nonBlackPixelRatio: 0.01,
           }),
         },
       ],
@@ -59,6 +63,11 @@ describe("agent trace", () => {
       height: 2532,
       dataSize: 42536,
       screenshotType: "screen",
+      captureProvider: "server",
+      fallbackReason: undefined,
+      qualityWarnings: ["mostlyBlack"],
+      blackPixelRatio: 0.99,
+      nonBlackPixelRatio: 0.01,
     });
   });
 

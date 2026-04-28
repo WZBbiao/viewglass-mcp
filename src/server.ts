@@ -594,7 +594,8 @@ server.registerTool(
       "Do NOT use this to find or inspect elements — screenshots have no OIDs and cannot " +
       "be used with other tools. Use ui_snapshot to get the element tree instead. " +
       "Without locator: captures the full screen. " +
-      "With locator: captures only the specified node (crop).",
+      "With locator: captures only the specified node (crop). " +
+      "The result includes captureProvider and qualityWarnings when the underlying CLI can detect screenshot fallback or suspicious black/empty output.",
     inputSchema: {
       locator: z
         .string()

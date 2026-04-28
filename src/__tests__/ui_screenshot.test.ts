@@ -34,12 +34,25 @@ describe("uiScreenshot - full screen", () => {
   });
 
   it("returns path from CLI output", async () => {
-    const exec = makeExec({ path: "/tmp/test.png", width: 1170, height: 2532, screenshotType: "screen" });
+    const exec = makeExec({
+      path: "/tmp/test.png",
+      width: 1170,
+      height: 2532,
+      screenshotType: "screen",
+      captureProvider: "simctl",
+      qualityWarnings: ["mostlyBlack"],
+      blackPixelRatio: 0.95,
+      nonBlackPixelRatio: 0.02,
+    });
     const result = await uiScreenshot({ session: "com.test@1234" }, exec);
     expect(result.path).toBe("/tmp/test.png");
     expect(result.width).toBe(1170);
     expect(result.height).toBe(2532);
     expect(result.screenshotType).toBe("screen");
+    expect(result.captureProvider).toBe("simctl");
+    expect(result.qualityWarnings).toEqual(["mostlyBlack"]);
+    expect(result.blackPixelRatio).toBe(0.95);
+    expect(result.nonBlackPixelRatio).toBe(0.02);
   });
 
   it("uses custom outputPath when provided", async () => {
