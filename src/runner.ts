@@ -111,28 +111,44 @@ export async function detectSession(exec?: ExecFn): Promise<string | undefined> 
     });
     const apps = JSON.parse(stdout) as Array<{
       bundleIdentifier: string;
+      deviceType?: string;
       port: number;
     }>;
 
     const config = loadProjectConfig();
     const bundleId = config?.sessionDefaults?.bundleId?.trim();
+    const preferredDeviceType = config?.sessionDefaults?.deviceType;
     if (bundleId) {
-      const match =
-        apps.find((app) => app.bundleIdentifier === bundleId) ??
-        apps.find((app) => app.bundleIdentifier.toLowerCase().includes(bundleId.toLowerCase()));
+      const exactMatches = apps.filter((app) => app.bundleIdentifier === bundleId);
+      const partialMatches = apps.filter((app) => app.bundleIdentifier.toLowerCase().includes(bundleId.toLowerCase()));
+      const match = choosePreferredApp(exactMatches.length > 0 ? exactMatches : partialMatches, preferredDeviceType);
       if (match) {
         return `${match.bundleIdentifier}@${match.port}`;
       }
     }
 
     if (apps.length > 0) {
-      const a = apps[0];
+      const a = choosePreferredApp(apps, preferredDeviceType) ?? apps[0];
       return `${a.bundleIdentifier}@${a.port}`;
     }
   } catch {
     // no app running or binary not found
   }
   return undefined;
+}
+
+function choosePreferredApp<T extends { deviceType?: string }>(
+  apps: T[],
+  preferredDeviceType?: "device" | "simulator"
+): T | undefined {
+  if (apps.length === 0) return undefined;
+
+  if (preferredDeviceType) {
+    const match = apps.find((app) => app.deviceType === preferredDeviceType);
+    if (match) return match;
+  }
+
+  return apps.find((app) => app.deviceType === "device") ?? apps[0];
 }
 
 /**

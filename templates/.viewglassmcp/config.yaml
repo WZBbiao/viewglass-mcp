@@ -3,3 +3,6 @@ sessionDefaults:
   # Fill this with the app bundle id once the project/session is known.
   # Example: com.example.app
   bundleId: ""
+  # Optional. Use "device" to prefer a physical iPhone when simulator and
+  # device sessions share the same bundle id; use "simulator" for demo apps.
+  deviceType: ""

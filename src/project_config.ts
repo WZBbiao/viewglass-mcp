@@ -5,6 +5,7 @@ export interface ViewglassProjectConfig {
   schemaVersion: number;
   sessionDefaults?: {
     bundleId?: string;
+    deviceType?: "device" | "simulator";
   };
 }
 
@@ -73,6 +74,12 @@ function parseProjectConfig(raw: string): ViewglassProjectConfig {
         const value = nested.slice("bundleId:".length).trim().replace(/^['\"]|['\"]$/g, "");
         config.sessionDefaults ??= {};
         if (value) config.sessionDefaults.bundleId = value;
+      } else if (nested.startsWith("deviceType:")) {
+        const value = nested.slice("deviceType:".length).trim().replace(/^['\"]|['\"]$/g, "");
+        if (value === "device" || value === "simulator") {
+          config.sessionDefaults ??= {};
+          config.sessionDefaults.deviceType = value;
+        }
       }
     }
   }
@@ -113,6 +120,7 @@ export function saveProjectBundleId(bundleId: string, startCwd: string = process
     `schemaVersion: ${next.schemaVersion}`,
     "sessionDefaults:",
     `  bundleId: \"${next.sessionDefaults?.bundleId ?? ""}\"`,
+    ...(next.sessionDefaults?.deviceType ? [`  deviceType: \"${next.sessionDefaults.deviceType}\"`] : []),
     "",
   ];
   fs.writeFileSync(configPath, lines.join("\n"), "utf8");

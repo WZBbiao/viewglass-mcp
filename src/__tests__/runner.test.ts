@@ -19,6 +19,14 @@ describe("detectSession", () => {
     expect(await detectSession(exec)).toBe("com.test.App@47164");
   });
 
+  it("prefers physical devices when auto-detecting without a deviceType override", async () => {
+    const exec = makeExec({ stdout: JSON.stringify([
+      { bundleIdentifier: "com.test.App", deviceType: "simulator", port: 47164 },
+      { bundleIdentifier: "com.test.App", deviceType: "device", port: 47175 },
+    ]) });
+    expect(await detectSession(exec)).toBe("com.test.App@47175");
+  });
+
   it("returns undefined when app list is empty", async () => {
     const exec = makeExec({ stdout: "[]" });
     expect(await detectSession(exec)).toBeUndefined();
@@ -46,6 +54,29 @@ describe("detectSession", () => {
         { bundleIdentifier: "com.target.app", port: 2222 }
       ]) });
       expect(await detectSession(exec)).toBe("com.target.app@2222");
+    } finally {
+      process.chdir(originalCwd);
+      fs.rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("honors configured deviceType when multiple sessions match bundleId", async () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "viewglass-config-"));
+    const project = path.join(tempRoot, "project");
+    fs.mkdirSync(path.join(project, ".viewglassmcp"), { recursive: true });
+    fs.writeFileSync(
+      path.join(project, ".viewglassmcp", "config.yaml"),
+      'schemaVersion: 1\nsessionDefaults:\n  bundleId: "com.target.app"\n  deviceType: "simulator"\n',
+      'utf8'
+    );
+    const originalCwd = process.cwd();
+    process.chdir(project);
+    try {
+      const exec = makeExec({ stdout: JSON.stringify([
+        { bundleIdentifier: "com.target.app", deviceType: "device", port: 47175 },
+        { bundleIdentifier: "com.target.app", deviceType: "simulator", port: 47165 },
+      ]) });
+      expect(await detectSession(exec)).toBe("com.target.app@47165");
     } finally {
       process.chdir(originalCwd);
       fs.rmSync(tempRoot, { recursive: true, force: true });
