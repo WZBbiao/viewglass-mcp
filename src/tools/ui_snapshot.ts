@@ -9,8 +9,14 @@ export interface UISnapshotInput {
   /** Filter hierarchy to nodes of this UIKit class name or query expression. */
   filter?: string;
   /**
-   * Maximum nodes returned in compact mode. Default: 80 without filter, 160
-   * with filter. Set to 0 to return the full compact node index.
+   * Default: actionIndex. actionIndex returns a small operation-oriented index
+   * for agents. fullIndex preserves the older broader compact node index.
+   */
+  mode?: "actionIndex" | "fullIndex";
+  /**
+   * Maximum nodes returned in compact mode. In actionIndex mode this is capped
+   * to keep tool responses small. In fullIndex mode, set to 0 to return the
+   * full compact node index.
    */
   maxNodes?: number;
   /**
@@ -20,9 +26,17 @@ export interface UISnapshotInput {
   compact?: boolean;
 }
 
-const DEFAULT_COMPACT_NODE_LIMIT = 80;
-const FILTERED_COMPACT_NODE_LIMIT = 160;
-const MAX_NAVIGATION_CANDIDATES = 16;
+type UISnapshotMode = "actionIndex" | "fullIndex";
+
+const DEFAULT_ACTION_INDEX_NODE_LIMIT = 24;
+const FILTERED_ACTION_INDEX_NODE_LIMIT = 32;
+const MAX_ACTION_INDEX_NODE_LIMIT = 48;
+const DEFAULT_FULL_INDEX_NODE_LIMIT = 80;
+const FILTERED_FULL_INDEX_NODE_LIMIT = 160;
+const MAX_NAVIGATION_CANDIDATES = 8;
+const MAX_VISIBLE_TEXT_ITEMS = 16;
+const MAX_TEXT_LENGTH = 96;
+const MAX_SEARCHABLE_TEXT_PER_NODE = 2;
 
 interface RawRect {
   x: number;
@@ -172,12 +186,16 @@ export interface UISnapshotOutput {
   snapshot: {
     snapshotId: string;
     fetchedAt: string;
+    mode?: UISnapshotMode;
     screenScale: number;
     screenSize: RawRect;
+    hierarchyNodeCount?: number;
     totalNodeCount?: number;
+    indexNodeCount?: number;
     returnedNodeCount?: number;
     nodeLimit?: number;
     truncated?: boolean;
+    detailHint?: string;
   };
   summary: UISnapshotSummary;
   groups: UISnapshotGroup[];
@@ -205,17 +223,34 @@ export async function uiSnapshot(
   const { stdout } = await runCLI(args, { session, exec });
   const hierarchy = parseJSON<RawHierarchy>(stdout, "ui_snapshot");
   const compact = input.compact !== false;
-  const maxNodes = compact
-    ? input.maxNodes ?? (input.filter ? FILTERED_COMPACT_NODE_LIMIT : DEFAULT_COMPACT_NODE_LIMIT)
-    : 0;
-  return buildAgentSnapshot(hierarchy, session, compact, maxNodes);
+  const mode: UISnapshotMode = compact ? (input.mode ?? "actionIndex") : "fullIndex";
+  const maxNodes = resolveNodeLimit({ mode, filter: input.filter, maxNodes: input.maxNodes, compact });
+  return buildAgentSnapshot(hierarchy, session, compact, maxNodes, mode);
+}
+
+function resolveNodeLimit(input: {
+  mode: UISnapshotMode;
+  filter?: string;
+  maxNodes?: number;
+  compact: boolean;
+}): number {
+  if (!input.compact) return 0;
+
+  if (input.mode === "actionIndex") {
+    const defaultLimit = input.filter ? FILTERED_ACTION_INDEX_NODE_LIMIT : DEFAULT_ACTION_INDEX_NODE_LIMIT;
+    const requested = input.maxNodes && input.maxNodes > 0 ? input.maxNodes : defaultLimit;
+    return Math.min(requested, MAX_ACTION_INDEX_NODE_LIMIT);
+  }
+
+  return input.maxNodes ?? (input.filter ? FILTERED_FULL_INDEX_NODE_LIMIT : DEFAULT_FULL_INDEX_NODE_LIMIT);
 }
 
 function buildAgentSnapshot(
   hierarchy: RawHierarchy,
   session: string,
   compact: boolean,
-  maxNodes: number
+  maxNodes: number,
+  mode: UISnapshotMode
 ): UISnapshotOutput {
   const rawNodes = flattenTrees(hierarchy.windows);
   const nodesByOid = new Map(rawNodes.map((node) => [node.oid, node]));
@@ -239,8 +274,13 @@ function buildAgentSnapshot(
     .filter((node) => shouldIncludeNode(node, groupByActionOid))
     .sort(sortNodes);
 
-  const nodes = applyNodeBudget(allNodes, groups, hierarchy.screenSize, maxNodes);
+  const indexNodes = mode === "actionIndex"
+    ? allNodes.filter((node) => shouldIncludeActionIndexNode(node, hierarchy.screenSize))
+    : allNodes;
+  const budgetedNodes = applyNodeBudget(indexNodes, groups, hierarchy.screenSize, maxNodes);
+  const nodes = budgetedNodes.map((node) => prepareOutputNode(node));
   const summary = buildSummary(hierarchy, allNodes, groups);
+  const outputGroups = groups.map((group) => prepareOutputGroup(group));
   const partial: UISnapshotOutput = {
     app: {
       appName: hierarchy.appInfo.appName,
@@ -253,21 +293,31 @@ function buildAgentSnapshot(
     snapshot: {
       snapshotId: hierarchy.snapshotId,
       fetchedAt: hierarchy.fetchedAt,
+      mode,
       screenScale: hierarchy.screenScale,
       screenSize: hierarchy.screenSize,
+      hierarchyNodeCount: rawNodes.length,
       totalNodeCount: allNodes.length,
+      indexNodeCount: indexNodes.length,
       returnedNodeCount: nodes.length,
       nodeLimit: maxNodes > 0 ? maxNodes : undefined,
-      truncated: nodes.length < allNodes.length,
+      truncated: nodes.length < indexNodes.length,
+      detailHint: "Default snapshot is an action index. Use ui_screenshot for visual layout and ui_attr_get for long text or full node details.",
     },
     summary,
-    groups,
+    groups: outputGroups,
     nodes,
     matchedRecipes: [],
     rawTree: compact ? undefined : hierarchy,
   };
   partial.matchedRecipes = matchProjectRecipes(
-    { ...partial, nodes: allNodes, rawTree: undefined },
+    {
+      ...partial,
+      summary: buildSummary(hierarchy, allNodes, groups, { truncateText: false }),
+      groups,
+      nodes: allNodes,
+      rawTree: undefined,
+    },
     loadProjectRecipes()
   );
 
@@ -476,6 +526,89 @@ function shouldIncludeNode(node: UISnapshotNode, groupByActionOid: Map<number, U
   if (node.controllerClass) return true;
   if (/Button|Label|Image|ScrollView|TableView|CollectionView|TextField|TextView|Cell|Tab/i.test(node.className)) return true;
   return groupByActionOid.has(node.actionTargetOid);
+}
+
+function shouldIncludeActionIndexNode(node: UISnapshotNode, screenSize: RawRect): boolean {
+  if (!node.visible && !node.actions.includes("dismiss")) return false;
+  if (node.groupId) return true;
+  if (isHighValueActionNode(node)) return true;
+  if (node.actions.includes("input")) return true;
+  if (node.actions.includes("tap")) return true;
+  if (node.actions.includes("scroll") && intersectsScreen(node.frame, screenSize)) return true;
+  if (node.role === "edgeTapTarget") return true;
+  if (node.accessibilityIdentifier && intersectsScreen(node.frame, screenSize)) return true;
+  return false;
+}
+
+function prepareOutputNode(node: UISnapshotNode): UISnapshotNode {
+  const searchableText = compactTextList(node.searchableText, MAX_SEARCHABLE_TEXT_PER_NODE);
+  return {
+    ...node,
+    className: compactClassName(node.className),
+    frame: compactFrame(node.frame),
+    text: truncateText(node.text),
+    searchableText,
+    controllerClass: undefined,
+    controllerOid: undefined,
+    oidType: undefined,
+  };
+}
+
+function prepareOutputGroup(group: UISnapshotGroup): UISnapshotGroup {
+  return {
+    ...group,
+    containerClassName: group.containerClassName ? compactClassName(group.containerClassName) : undefined,
+    frame: compactFrame(group.frame),
+    itemLabels: compactTextList(group.itemLabels, group.itemLabels.length),
+    items: group.items.map((item) => ({
+      ...item,
+      frame: compactFrame(item.frame),
+      label: truncateText(item.label) ?? "",
+    })),
+  };
+}
+
+function compactFrame(frame: RawRect): RawRect {
+  return {
+    x: roundFrameValue(frame.x),
+    y: roundFrameValue(frame.y),
+    width: roundFrameValue(frame.width),
+    height: roundFrameValue(frame.height),
+  };
+}
+
+function roundFrameValue(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+function compactClassName(className: string): string {
+  if (className.length <= 48) return className;
+  if (/UITabButton.*Label/i.test(className)) return "UITabButtonLabel";
+  const segments = className.split(".");
+  const lastSegment = segments[segments.length - 1];
+  if (lastSegment && lastSegment.length <= 48) return lastSegment;
+  return `${className.slice(0, 47)}…`;
+}
+
+function truncateText(value: string | undefined | null, maxLength = MAX_TEXT_LENGTH): string | undefined {
+  const text = value?.trim();
+  if (!text) return undefined;
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+}
+
+function compactTextList(values: string[], maxItems: number): string[] {
+  return dedupeStrings(values.map((value) => truncateText(value))).slice(0, maxItems);
+}
+
+function isUsefulVisibleText(value: string): boolean {
+  const text = value.trim();
+  if (!text) return false;
+  if (text.startsWith("_")) return false;
+  if (/^com\.apple\./i.test(text)) return false;
+  if (/AccessibilityLabel$/i.test(text)) return false;
+  if (/^UI[A-Z].*View$/i.test(text)) return false;
+  return true;
 }
 
 function sortNodes(a: UISnapshotNode, b: UISnapshotNode): number {
@@ -805,19 +938,27 @@ function inferSelectedReason(
   return undefined;
 }
 
-function buildSummary(hierarchy: RawHierarchy, nodes: UISnapshotNode[], groups: UISnapshotGroup[]): UISnapshotSummary {
-  const visibleText = dedupeStrings(nodes.flatMap((node) => node.searchableText)).slice(0, 40);
-  const controllerHints = dedupeStrings(nodes.map((node) => node.controllerClass ?? undefined));
+function buildSummary(
+  hierarchy: RawHierarchy,
+  nodes: UISnapshotNode[],
+  groups: UISnapshotGroup[],
+  options: { truncateText?: boolean } = { truncateText: true }
+): UISnapshotSummary {
+  const visibleTextSource = dedupeStrings(nodes.flatMap((node) => node.searchableText)).filter(isUsefulVisibleText);
+  const visibleText = options.truncateText === false
+    ? visibleTextSource.slice(0, 40)
+    : compactTextList(visibleTextSource, MAX_VISIBLE_TEXT_ITEMS);
+  const controllerHints = dedupeStrings(nodes.map((node) => node.controllerClass ? compactClassName(node.controllerClass) : undefined)).slice(0, 8);
   const navigationCandidates = buildNavigationCandidates(nodes, hierarchy.screenSize);
   const bottomBarCandidates = groups
     .filter((group) => group.role === "bottomNavigation")
     .map((group) => ({
       groupId: group.id,
       className: group.containerClassName,
-      labelHints: group.itemLabels,
-      selectedLabel: group.items.find((item) => item.selected)?.label,
+      labelHints: compactTextList(group.itemLabels, group.itemLabels.length),
+      selectedLabel: truncateText(group.items.find((item) => item.selected)?.label),
       selectedNodeId: group.selectedOid ? `node_${group.selectedOid}` : undefined,
-      frame: group.frame,
+      frame: compactFrame(group.frame),
     }));
 
   return {
@@ -854,12 +995,12 @@ function buildNavigationCandidates(nodes: UISnapshotNode[], screenSize: RawRect)
     .map((node) => ({
       oid: node.oid,
       actionTargetOid: node.actionTargetOid,
-      label: node.text,
+      label: truncateText(node.text),
       accessibilityIdentifier: node.accessibilityIdentifier,
-      className: node.className,
+      className: compactClassName(node.className),
       role: node.role,
       areaHint: areaHintForFrame(node.frame, screenSize),
-      frame: node.frame,
+      frame: compactFrame(node.frame),
     }));
 }
 

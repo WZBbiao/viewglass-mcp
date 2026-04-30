@@ -40,9 +40,10 @@ When ViewglassMCP starts normally, it now bootstraps itself automatically like `
 For page navigation, settings flows, tab switching, and custom UI:
 
 1. Start with `ui_snapshot`
-   - Use it to understand the current page, visible labels, groups, and likely action targets.
+   - Default output is a small action index: visible labels, groups, navigation candidates, and likely action targets.
    - For textless settings/profile icons, inspect `summary.navigationCandidates` and `areaHint` such as `topRight`.
-   - Default snapshots are budgeted for agents; use `maxNodes=0` only when the target is missing from the compact index.
+   - Use `ui_screenshot` for visual layout and `ui_attr_get` for long text or detailed attributes after you know the `oid`.
+   - Use `mode=fullIndex` only when the default action index is insufficient.
    - Treat it as the source of truth for "where am I right now?".
 2. Then use execution tools with exact `oid`
    - Extract the exact target `oid` from `ui_snapshot.groups` or `ui_snapshot.nodes`.

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { uiSnapshot } from "../tools/ui_snapshot.js";
 import type { ExecFn } from "../runner.js";
 
@@ -358,8 +358,23 @@ function makeExec(stdout: string, error?: Error): ExecFn {
   });
 }
 
+const originalCwd = process.cwd();
+let testProject: string | undefined;
+
+beforeEach(() => {
+  testProject = fs.mkdtempSync(path.join(os.tmpdir(), "viewglass-snapshot-test-"));
+  fs.mkdirSync(path.join(testProject, ".git"));
+  process.chdir(testProject);
+  process.env.PWD = testProject;
+});
+
 afterEach(() => {
+  process.chdir(originalCwd);
   delete process.env.PWD;
+  if (testProject) {
+    fs.rmSync(testProject, { recursive: true, force: true });
+    testProject = undefined;
+  }
 });
 
 describe("uiSnapshot", () => {
@@ -420,8 +435,9 @@ describe("uiSnapshot", () => {
     const result = await uiSnapshot({ session: "com.test@1234" }, exec);
 
     expect(result.snapshot.totalNodeCount).toBeGreaterThan(80);
-    expect(result.snapshot.returnedNodeCount).toBeLessThanOrEqual(80);
-    expect(result.snapshot.nodeLimit).toBe(80);
+    expect(result.snapshot.returnedNodeCount).toBeLessThanOrEqual(24);
+    expect(result.snapshot.nodeLimit).toBe(24);
+    expect(result.snapshot.mode).toBe("actionIndex");
     expect(result.snapshot.truncated).toBe(true);
     expect(result.nodes.some((node) => node.actions.includes("invoke"))).toBe(false);
 
@@ -437,7 +453,7 @@ describe("uiSnapshot", () => {
     const settingsNode = result.nodes.find((node) => node.oid === 50);
     expect(settingsNode?.actions).toContain("tap");
 
-    const fullResult = await uiSnapshot({ session: "com.test@1234", maxNodes: 0 }, exec);
+    const fullResult = await uiSnapshot({ session: "com.test@1234", mode: "fullIndex", maxNodes: 0 }, exec);
     expect(fullResult.snapshot.truncated).toBe(false);
     expect(fullResult.nodes.length).toBeGreaterThan(result.nodes.length);
   });
@@ -459,9 +475,46 @@ describe("uiSnapshot", () => {
     );
   });
 
+  it("keeps default action index small when maxNodes=0 and truncates long text", async () => {
+    const hierarchy = makeNoisyHierarchy();
+    const contentTree = hierarchy.windows[0].children[0];
+    const longText = "Publish " + "very long review text ".repeat(20);
+    contentTree.node.childrenOids.push(400);
+    contentTree.children.push({
+      node: {
+        oid: 400,
+        primaryOid: 400,
+        oidType: "view",
+        className: "UIButton",
+        frame: { x: 24, y: 420, width: 180, height: 44 },
+        bounds: { x: 0, y: 0, width: 180, height: 44 },
+        isHidden: false,
+        alpha: 1,
+        isUserInteractionEnabled: true,
+        childrenOids: [],
+        parentOid: 10,
+        customDisplayTitle: longText,
+        attributeGroups: [],
+      },
+      children: [],
+    });
+
+    const exec = makeExec(JSON.stringify(hierarchy));
+    const result = await uiSnapshot({ session: "com.test@1234", maxNodes: 0 }, exec);
+
+    expect(result.snapshot.mode).toBe("actionIndex");
+    expect(result.snapshot.nodeLimit).toBe(24);
+    expect(result.snapshot.returnedNodeCount).toBeLessThanOrEqual(24);
+    expect(result.nodes.length).toBeLessThan(80);
+
+    const publishNode = result.nodes.find((node) => node.oid === 400);
+    expect(publishNode?.text?.endsWith("…")).toBe(true);
+    expect(publishNode?.text?.length).toBeLessThanOrEqual(120);
+    expect(result.summary.visibleText.every((text) => text.length <= 120)).toBe(true);
+  });
+
   it("loads matched project recipes and resolves recommended oids", async () => {
-    const project = fs.mkdtempSync(path.join(os.tmpdir(), "viewglass-snapshot-recipes-"));
-    fs.mkdirSync(path.join(project, ".git"));
+    const project = testProject!;
     fs.mkdirSync(path.join(project, ".viewglassmcp"));
     fs.writeFileSync(
       path.join(project, ".viewglassmcp", "recipes.yaml"),
@@ -485,9 +538,6 @@ recipes:
 `,
       "utf8"
     );
-    process.chdir(project);
-    process.env.PWD = project;
-
     const exec = makeExec(JSON.stringify(hierarchyFixture));
     const result = await uiSnapshot({ session: "com.test@1234" }, exec);
 

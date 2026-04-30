@@ -133,21 +133,27 @@ server.registerTool(
   {
     description:
       "Capture the current UI as an agent-first snapshot. " +
-      "The result includes app/session metadata, a summary, inferred switcher/navigation groups, " +
-      "navigationCandidates for top/bottom entry points, a budgeted flattened node index with searchableText and actionTargetOid fields, " +
+      "Default output is a small action index: app/session metadata, visible text summary, inferred switcher/navigation groups, " +
+      "navigationCandidates for top/bottom entry points, a budgeted list of actionable nodes with searchableText/actionTargetOid fields, " +
       "and matched project-local recipes when available, so agents can " +
       "find targets without guessing UIKit class names. " +
       "Best practice: for any navigation or custom UI task, call ui_snapshot first to understand the current page, " +
-      "then use ui_tap with a concrete visible label or oid from the snapshot. " +
+      "then use ui_tap with an exact oid from the snapshot. " +
       "If the target is a settings/profile-style icon without text, inspect summary.navigationCandidates by areaHint such as topRight. " +
-      "Use filter to narrow to a specific class or locator, or maxNodes=0 when you need the full compact index. " +
-      "Set compact=false only when you also need rawTree.",
+      "Use ui_screenshot for visual layout and ui_attr_get for long text or detailed attributes. " +
+      "Use mode=fullIndex only when the small action index is insufficient. Set compact=false only when you also need rawTree.",
     inputSchema: {
       session: sessionSchema,
       filter: z
         .string()
         .optional()
         .describe("Only return nodes of this UIKit class name (e.g. UILabel)."),
+      mode: z
+        .enum(["actionIndex", "fullIndex"])
+        .optional()
+        .describe(
+          "Default: actionIndex, a small operation index for agents. Use fullIndex only when you need the older broader compact node index."
+        ),
       compact: z
         .boolean()
         .optional()
@@ -161,15 +167,15 @@ server.registerTool(
         .max(500)
         .optional()
         .describe(
-          "Compact-mode node budget. Default: 80, or 160 when filter is set. Set 0 to return the full compact node index."
+          "Compact-mode node budget. In actionIndex mode defaults to 24, or 32 when filter is set, and is capped at 48. In fullIndex mode defaults to 80/160; set 0 to return the full compact node index."
         ),
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ session, filter, compact, maxNodes }) =>
-    withToolLogging("ui_snapshot", { session, filter, compact, maxNodes }, async () => {
+  async ({ session, filter, mode, compact, maxNodes }) =>
+    withToolLogging("ui_snapshot", { session, filter, mode, compact, maxNodes }, async () => {
       try {
-        const result = await uiSnapshot({ session, filter, compact, maxNodes });
+        const result = await uiSnapshot({ session, filter, mode, compact, maxNodes });
         return { content: [{ type: "text", text: JSON.stringify(result) }] };
       } catch (e) {
         return { isError: true, content: [{ type: "text", text: String(e) }] };

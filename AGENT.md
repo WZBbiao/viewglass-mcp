@@ -25,7 +25,9 @@ Use these tools in this order unless the task is trivial and the target is alrea
 
 1. `ui_snapshot`
    - Always start here for navigation, tab switching, settings pages, custom UI, and any unknown screen.
-   - Use the snapshot summary, groups, nodes, and visible labels to understand the current page.
+   - Default output is a compact action index. Use `summary`, `groups`, `navigationCandidates`, and `nodes` to identify exact operation targets.
+   - Use `ui_screenshot` for visual layout and `ui_attr_get` for long text or full runtime attributes after the target `oid` is known.
+   - Use `mode=fullIndex` only when the compact action index is insufficient.
 2. Resolve an exact target `oid` from `ui_snapshot`
    - Prefer `groups.items[].oid` and `nodes[].oid` / `actionTargetOid`.
    - Prefer user-visible labels over UIKit private class names.
@@ -40,12 +42,12 @@ Use these tools in this order unless the task is trivial and the target is alrea
 Avoid these anti-patterns:
 
 - starting with repeated locator guesses to figure out which page is currently visible
-- taking screenshots before using the structured snapshot, unless the task is explicitly visual
+- taking screenshots before using the structured snapshot, unless the task is visual or layout-heavy
 - inventing alternate locator DSL such as `@"..."` or private query syntax
 - guessing UIKit internal class names before reading the snapshot
 - passing guessed labels to execution tools instead of first resolving an exact `oid`
 
-If `ui_snapshot` is large, it is acceptable to parse the returned JSON programmatically. That is a valid agent strategy. The important constraint is to base decisions on the snapshot first, not on blind UIKit guesses.
+Do not repeatedly request large snapshots. The default `ui_snapshot` is intentionally small; use screenshots for visual context and targeted attribute reads for long content.
 
 ## Local project experience memory
 
