@@ -252,8 +252,9 @@ server.registerTool(
   "ui_scroll",
   {
     description:
-      "Scroll a UIScrollView, UITableView, or UICollectionView by oid only. " +
+      "Scroll by oid using a human-like swipe on a resolved scroll container. " +
       "First call ui_snapshot, inspect groups/nodes, then pass the exact oid here. " +
+      "If the oid points to a wrapper/cell, ui_scroll resolves to an inner or ancestor scroll view that exposes contentOffset before swiping. " +
       "Returns an execution summary only. " +
       "Use direction 'down' to reveal content below the fold, 'up' to scroll back. " +
       "distance defaults to 300 pts if omitted.",
@@ -261,7 +262,7 @@ server.registerTool(
       oid: z.coerce.string().describe("Executable node oid from ui_snapshot."),
       direction: z.enum(["up", "down", "left", "right"]).describe("Scroll direction."),
       distance: z.number().positive().optional().describe("Distance in pts (default 300)."),
-      animated: z.boolean().optional().describe("Whether to animate (default true)."),
+      animated: z.boolean().optional().describe("Whether to animate the swipe (default true)."),
       session: sessionSchema,
     },
   },
@@ -667,8 +668,8 @@ server.registerTool(
   {
     description:
       "Perform a swipe gesture on a UIScrollView. " +
-      "Unlike ui_scroll (contentOffset manipulation), ui_swipe fires a real gesture — " +
-      "use it for paging scroll views, carousels, and gesture-driven interactions. " +
+      "Use ui_scroll for normal page scrolling because it resolves wrappers/cells to the real scroll container first. " +
+      "Use ui_swipe directly for paging scroll views, carousels, and gesture-driven interactions. " +
       "distance defaults to 200 pts if omitted.",
     inputSchema: {
       target: z.string().describe("Plain locator string: visible text, accessibility identifier, class name, or numeric oid."),

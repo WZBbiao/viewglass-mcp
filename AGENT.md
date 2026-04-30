@@ -34,6 +34,7 @@ Use these tools in this order unless the task is trivial and the target is alrea
    - Do not guess `UITabBar`, `UITabBarButton`, `UIButton`, or private wrapper classes unless the snapshot already proves they are the right target.
 3. Execute using exact `oid`
    - `ui_tap`, `ui_scroll`, `ui_input`, and `ui_dismiss` require the exact `oid` you resolved from `ui_snapshot`.
+   - For page/list scrolling, `ui_scroll` may be given a visible wrapper/cell oid; it resolves to the real scroll view and performs a swipe-style scroll.
 4. `ui_wait` or another `ui_snapshot`
    - Use this to confirm navigation, modal transitions, and list updates.
 5. `ui_attr_get`

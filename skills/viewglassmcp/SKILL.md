@@ -19,6 +19,7 @@ Use Viewglass MCP tools to inspect and interact with a live iOS app.
 ## Step 2: Resolve an Exact OID Before Executing
 
 - `ui_tap`, `ui_scroll`, `ui_input`, and `ui_dismiss` require an exact `oid` from `ui_snapshot`.
+- For page/list scrolling, use `ui_scroll` on the best visible container/cell oid; it resolves wrapper/cell targets to the real scroll view and performs a swipe-style scroll.
 - Do not guess UIKit private class names before reading the snapshot.
 - Prefer visible labels, `groups`, `searchableText`, `actionTargetOid`, and stable structure over temporary runtime details.
 

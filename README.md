@@ -22,7 +22,7 @@ When ViewglassMCP starts normally, it now bootstraps itself automatically like `
 | `ui_snapshot` | Capture an agent-first UI snapshot with summary, navigation candidates, budgeted searchable nodes, matched recipes, and optional rawTree. |
 | `ui_attr_get` | Get runtime attributes of a node by OID. |
 | `ui_tap` | Tap a node by exact `oid` from `ui_snapshot`. Supports UIControl, gesture-backed views, UITableViewCell, and UICollectionViewCell. |
-| `ui_scroll` | Scroll a scroll view by exact `oid` from `ui_snapshot` and return an execution summary. |
+| `ui_scroll` | Scroll by exact `oid`; resolves wrapper/cell targets to a real scroll view and performs a swipe-style scroll. |
 | `ui_set_attr` | Set an attribute on a node at runtime (live, no recompile). |
 | `ui_invoke` | Call any ObjC selector on any node — the highest-leverage tool. |
 | `ui_wait` | Poll until a node appears, disappears, or an attribute matches. |

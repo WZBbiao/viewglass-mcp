@@ -29,9 +29,8 @@ export interface UISwipeResult {
 /**
  * Swipe a UIScrollView node in a given direction.
  *
- * Unlike ui_scroll (which uses contentOffset manipulation), ui_swipe triggers
- * a real swipe gesture, making it suitable for gesture-driven interactions,
- * paging scroll views, or carousel components.
+ * Direct semantic swipe on a UIScrollView node. Prefer ui_scroll for normal
+ * page/list scrolling because it resolves wrapper/cell targets first.
  *
  * Returns { target, direction, distance, ok: true }.
  */
