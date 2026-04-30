@@ -39,8 +39,9 @@ export async function uiSetAttr(
   const target = input.oid
     ? input.oid
     : (await resolveUniqueNodeLocator(input.locator!, session, exec)).resolvedTarget;
+  const cliAttr = normalizeCLIAttr(input.attr);
   // CLI syntax: attr set <target> <key> <value> [--session <s>]
-  await runCLI(["attr", "set", target, input.attr, input.value], {
+  await runCLI(["attr", "set", target, cliAttr, input.value], {
     session,
     exec,
     timeoutMs: 30_000,
@@ -52,4 +53,10 @@ export async function uiSetAttr(
     value: input.value,
     ok: true,
   };
+}
+
+function normalizeCLIAttr(attr: string): string {
+  // Viewglass hierarchy exposes effective visibility through opacity. Treat
+  // alpha as the public alias agents expect, but write the stable runtime key.
+  return attr.trim().toLocaleLowerCase() === "alpha" ? "opacity" : attr;
 }

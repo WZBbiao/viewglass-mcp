@@ -52,7 +52,7 @@ describe("uiSetAttr", () => {
     }, exec);
     const attrSetCall = (exec.mock.calls as [string, string[]][]).find((c) => c[1][0] === "attr");
     expect(attrSetCall?.[1]).toEqual([
-      "attr", "set", "5678", "alpha", "0.8", "--session", "com.test@1234",
+      "attr", "set", "5678", "opacity", "0.8", "--session", "com.test@1234",
     ]);
     expect(result).toEqual({
       locator: "primary_text_field",

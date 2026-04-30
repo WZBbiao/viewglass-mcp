@@ -1,4 +1,4 @@
-import { runCLI, resolveSession } from "../runner.js";
+import { parseJSON, runCLI, resolveSession } from "../runner.js";
 import type { ExecFn } from "../runner.js";
 
 export interface UIDismissInput {
@@ -10,7 +10,25 @@ export interface UIDismissInput {
 
 export interface UIDismissResult {
   oid: string;
+  resolvedOid?: string;
   ok: true;
+}
+
+interface RawNode {
+  oid: number;
+  primaryOid?: number;
+  parentOid?: number;
+  className?: string;
+  hostViewControllerOid?: number | null;
+}
+
+interface RawTree {
+  node: RawNode;
+  children?: RawTree[];
+}
+
+interface RawHierarchy {
+  windows?: RawTree[];
 }
 
 /**
@@ -33,9 +51,42 @@ export async function uiDismiss(
     throw new Error("ui_dismiss requires an exact oid from ui_snapshot. First inspect ui_snapshot.groups/nodes, then pass that oid to ui_dismiss.");
   }
   const session = await resolveSession(input.session, exec);
-  await runCLI(["dismiss", input.oid, "--json"], { session, exec });
-  return {
+  const resolvedOid = await resolveDismissTargetOid(input.oid, session, exec);
+  await runCLI(["dismiss", resolvedOid, "--json"], { session, exec });
+  const result: UIDismissResult = {
     oid: input.oid,
     ok: true,
   };
+  if (resolvedOid !== input.oid) result.resolvedOid = resolvedOid;
+  return result;
+}
+
+async function resolveDismissTargetOid(oid: string, session: string, exec?: ExecFn): Promise<string> {
+  const numericOid = Number(oid);
+  if (!Number.isInteger(numericOid)) return oid;
+
+  const { stdout } = await runCLI(["hierarchy", "--json"], { session, exec });
+  const hierarchy = parseJSON<RawHierarchy>(stdout, "ui_dismiss/hierarchy");
+  const nodes = flattenTrees(hierarchy.windows ?? []);
+  const byOid = new Map(nodes.map((node) => [node.oid, node]));
+  const start = byOid.get(numericOid) ?? nodes.find((node) => node.primaryOid === numericOid);
+  if (!start) return oid;
+
+  let probe: RawNode | undefined = start;
+  for (let steps = 0; probe && steps < 20; steps += 1) {
+    if (probe.hostViewControllerOid) return String(probe.hostViewControllerOid);
+    probe = probe.parentOid ? byOid.get(probe.parentOid) : undefined;
+  }
+
+  return oid;
+}
+
+function flattenTrees(trees: RawTree[]): RawNode[] {
+  const result: RawNode[] = [];
+  const walk = (tree: RawTree) => {
+    result.push(tree.node);
+    for (const child of tree.children ?? []) walk(child);
+  };
+  for (const tree of trees) walk(tree);
+  return result;
 }

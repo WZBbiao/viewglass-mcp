@@ -61,6 +61,8 @@ type SnapshotResult = {
   nodes?: SnapshotNode[];
 };
 
+type SnapshotMode = "actionIndex" | "fullIndex";
+
 class MCPClient {
   private proc: ReturnType<typeof spawn>;
   private pendingCalls = new Map<number, (r: JsonRpcResponse) => void>();
@@ -176,20 +178,17 @@ function snapshotNodeTexts(node: SnapshotNode): string[] {
 
 async function loadSnapshot(
   client: MCPClient,
-  filter?: string
+  filter?: string,
+  mode: SnapshotMode = "actionIndex"
 ): Promise<SnapshotResult> {
   return client.callToolJSON<SnapshotResult>("ui_snapshot", {
     session: SESSION,
     ...(filter ? { filter } : {}),
+    ...(mode === "fullIndex" ? { mode, maxNodes: 0 } : {}),
   });
 }
 
-async function resolveTapOid(
-  client: MCPClient,
-  label: string,
-  filter?: string
-): Promise<string> {
-  const snapshot = await loadSnapshot(client, filter);
+function findTapOidInSnapshot(snapshot: SnapshotResult, label: string): string | undefined {
   const wanted = normalize(label);
 
   for (const group of snapshot.groups ?? []) {
@@ -209,11 +208,24 @@ async function resolveTapOid(
     }
   }
 
+  return undefined;
+}
+
+async function resolveTapOid(
+  client: MCPClient,
+  label: string,
+  filter?: string
+): Promise<string> {
+  const actionIndexOid = findTapOidInSnapshot(await loadSnapshot(client, filter), label);
+  if (actionIndexOid) return actionIndexOid;
+
+  const fullIndexOid = findTapOidInSnapshot(await loadSnapshot(client, filter, "fullIndex"), label);
+  if (fullIndexOid) return fullIndexOid;
+
   throw new Error(`could not resolve oid for '${label}'`);
 }
 
-async function resolveNodeOid(client: MCPClient, label: string): Promise<string> {
-  const snapshot = await loadSnapshot(client);
+function findNodeOidInSnapshot(snapshot: SnapshotResult, label: string): string | undefined {
   const wanted = normalize(label);
 
   for (const node of snapshot.nodes ?? []) {
@@ -224,6 +236,16 @@ async function resolveNodeOid(client: MCPClient, label: string): Promise<string>
     }
   }
 
+  return undefined;
+}
+
+async function resolveNodeOid(client: MCPClient, label: string): Promise<string> {
+  const actionIndexOid = findNodeOidInSnapshot(await loadSnapshot(client), label);
+  if (actionIndexOid) return actionIndexOid;
+
+  const fullIndexOid = findNodeOidInSnapshot(await loadSnapshot(client, undefined, "fullIndex"), label);
+  if (fullIndexOid) return fullIndexOid;
+
   throw new Error(`could not resolve node oid for '${label}'`);
 }
 
@@ -231,7 +253,16 @@ async function resolveFirstOidByClass(
   client: MCPClient,
   className: string
 ): Promise<string> {
-  const snapshot = await loadSnapshot(client, className);
+  const actionIndexOid = firstOidByClass(await loadSnapshot(client, className), className);
+  if (actionIndexOid) return actionIndexOid;
+
+  const fullIndexOid = firstOidByClass(await loadSnapshot(client, className, "fullIndex"), className);
+  if (fullIndexOid) return fullIndexOid;
+
+  throw new Error(`could not resolve oid for class '${className}'`);
+}
+
+function firstOidByClass(snapshot: SnapshotResult, className: string): string | undefined {
   const nodes = snapshot.nodes ?? [];
   for (const node of nodes) {
     if (node.controllerClass === className) {
@@ -255,7 +286,17 @@ async function resolveFirstOidByClass(
     const oid = asOid(node.actionTargetOid) ?? asOid(node.oid);
     if (oid) return oid;
   }
-  throw new Error(`could not resolve oid for class '${className}'`);
+  return undefined;
+}
+
+async function waitForLocator(client: MCPClient, locator: string, timeout = 5): Promise<void> {
+  await client.callToolJSON("ui_wait", {
+    mode: "appears",
+    locator,
+    timeout,
+    intervalMs: 250,
+    session: SESSION,
+  });
 }
 
 async function resetToHome(client: MCPClient): Promise<void> {
@@ -391,6 +432,7 @@ async function runE2E() {
 
     await test("tap table cell label triggers UITableViewCell selection", async () => {
       await client.callToolJSON("ui_tap", { oid: await resolveTapOid(client, "push_selectable_surfaces_screen"), session: SESSION });
+      await waitForLocator(client, "selection_status");
       await client.callToolJSON("ui_tap", { oid: await resolveTapOid(client, "table_row_label_1"), session: SESSION });
       const oid = await resolveNodeOid(client, "selection_status");
       const attrs = await client.callToolJSON<Record<string, unknown>>(
@@ -680,8 +722,8 @@ async function runE2E() {
       if (r.isError) throw new Error("modal did not appear");
     });
 
-    await test("dismiss UINavigationController returns execution summary", async () => {
-      const oid = await resolveFirstOidByClass(client, "UINavigationController");
+    await test("dismiss modal-hosted node returns execution summary", async () => {
+      const oid = await resolveTapOid(client, "dismiss_modal");
       const data = await client.callToolJSON<{ ok?: boolean; oid?: string }>(
         "ui_dismiss", { oid, session: SESSION }
       );
