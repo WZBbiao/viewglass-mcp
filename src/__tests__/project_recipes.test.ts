@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { loadProjectRecipes, matchProjectRecipes, parseRecipesYaml } from "../project_recipes.js";
 import type { UISnapshotOutput } from "../tools/ui_snapshot.js";
 
@@ -141,10 +141,6 @@ recipes:
         - "TapTap.UserNavigationController"
 `;
 
-afterEach(() => {
-  delete process.env.PWD;
-});
-
 describe("project recipes", () => {
   it("parses generated recipe yaml", () => {
     const recipes = parseRecipesYaml(sampleRecipes);
@@ -158,10 +154,8 @@ describe("project recipes", () => {
     fs.mkdirSync(path.join(project, ".git"));
     fs.mkdirSync(path.join(project, ".viewglassmcp"));
     fs.writeFileSync(path.join(project, ".viewglassmcp", "recipes.yaml"), sampleRecipes, "utf8");
-    process.chdir(project);
-    process.env.PWD = project;
 
-    const recipes = loadProjectRecipes();
+    const recipes = loadProjectRecipes(project);
     expect(recipes).toHaveLength(1);
     expect(recipes[0]?.id).toBe("switch_to_me");
   });

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { uiScan } from "../tools/ui_scan.js";
 import type { ExecFn } from "../runner.js";
 
@@ -11,33 +11,38 @@ function makeExec(apps?: object[]): ExecFn {
   });
 }
 
-
-afterEach(() => {
-  delete process.env.PWD;
-});
-
 describe("uiScan", () => {
   it("auto-persists bundleId when exactly one session is found", async () => {
     const project = fs.mkdtempSync(path.join(os.tmpdir(), "viewglass-ui-scan-"));
     fs.mkdirSync(path.join(project, ".git"));
-    process.chdir(project);
-    process.env.PWD = project;
 
-    const exec = makeExec([{ bundleIdentifier: "com.example.App", port: 47164 }]);
-    await uiScan(exec);
+    const exec = makeExec([{ bundleIdentifier: "com.example.App", port: 47164, deviceType: "device" }]);
+    await uiScan(exec, project);
 
     const configPath = path.join(project, ".viewglassmcp", "config.yaml");
     expect(fs.existsSync(configPath)).toBe(true);
     expect(fs.readFileSync(configPath, "utf8")).toContain('bundleId: "com.example.App"');
+    expect(fs.readFileSync(configPath, "utf8")).toContain('deviceType: "device"');
   });
 
-  it("returns sessions with bundleId, port, session string", async () => {
-    const exec = makeExec([{ bundleIdentifier: "com.example.App", port: 47164 }]);
+  it("returns sessions with bundleId, port, session string, and device metadata", async () => {
+    const exec = makeExec([{
+      bundleIdentifier: "com.example.App",
+      port: 47164,
+      deviceType: "device",
+      deviceName: "iPhone",
+      deviceIdentifier: "UDID-1",
+      serverVersion: "1.2.3",
+    }]);
     const result = await uiScan(exec);
     expect(result.sessions).toHaveLength(1);
     expect(result.sessions[0].bundleId).toBe("com.example.App");
     expect(result.sessions[0].port).toBe(47164);
     expect(result.sessions[0].session).toBe("com.example.App@47164");
+    expect(result.sessions[0].deviceType).toBe("device");
+    expect(result.sessions[0].deviceName).toBe("iPhone");
+    expect(result.sessions[0].deviceIdentifier).toBe("UDID-1");
+    expect(result.sessions[0].serverVersion).toBe("1.2.3");
   });
 
   it("returns empty sessions when no apps found", async () => {

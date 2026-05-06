@@ -10,6 +10,14 @@ export interface UISessionInfo {
   port: number;
   /** Ready-to-use session string: "bundleId@port". */
   session: string;
+  /** Physical device or simulator, as reported by the Viewglass CLI. */
+  deviceType?: "device" | "simulator";
+  /** Device name, when available. */
+  deviceName?: string;
+  /** Physical device UDID, when available. */
+  deviceIdentifier?: string;
+  /** ViewglassServer version, when available. */
+  serverVersion?: string;
 }
 
 export interface ViewglassSetupGuide {
@@ -110,10 +118,20 @@ const SETUP_GUIDE: ViewglassSetupGuide = {
  *   2b. Sessions empty → read setupGuide, help user integrate ViewglassServer,
  *       then ask them to build & run the app, then call ui_scan again
  */
-export async function uiScan(exec?: ExecFn): Promise<UIScanResult> {
+export async function uiScan(
+  exec?: ExecFn,
+  projectCwd: string = process.cwd()
+): Promise<UIScanResult> {
   const fn = exec ?? defaultExec;
 
-  let apps: Array<{ bundleIdentifier: string; port: number }> = [];
+  let apps: Array<{
+    bundleIdentifier: string;
+    port: number;
+    deviceType?: "device" | "simulator";
+    deviceName?: string;
+    deviceIdentifier?: string;
+    serverVersion?: string;
+  }> = [];
   try {
     const { stdout } = await fn(VIEWGLASS_BIN, ["apps", "list", "--json"], {
       timeout: 15_000,
@@ -127,6 +145,10 @@ export async function uiScan(exec?: ExecFn): Promise<UIScanResult> {
     bundleId: a.bundleIdentifier,
     port: a.port,
     session: `${a.bundleIdentifier}@${a.port}`,
+    deviceType: a.deviceType,
+    deviceName: a.deviceName,
+    deviceIdentifier: a.deviceIdentifier,
+    serverVersion: a.serverVersion,
   }));
 
   if (sessions.length === 0) {
@@ -141,7 +163,7 @@ export async function uiScan(exec?: ExecFn): Promise<UIScanResult> {
   }
 
   if (sessions.length === 1) {
-    saveProjectBundleId(sessions[0].bundleId);
+    saveProjectBundleId(sessions[0].bundleId, projectCwd, sessions[0].deviceType);
   }
 
   return {

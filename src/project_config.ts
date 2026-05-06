@@ -93,7 +93,11 @@ export function loadProjectConfig(startCwd: string = process.cwd()): ViewglassPr
   return parseProjectConfig(fs.readFileSync(configPath, "utf8"));
 }
 
-export function saveProjectBundleId(bundleId: string, startCwd: string = process.cwd()): string | undefined {
+export function saveProjectBundleId(
+  bundleId: string,
+  startCwd: string = process.cwd(),
+  deviceType?: "device" | "simulator"
+): string | undefined {
   const normalized = bundleId.trim();
   if (!normalized) return undefined;
 
@@ -113,6 +117,7 @@ export function saveProjectBundleId(bundleId: string, startCwd: string = process
     sessionDefaults: {
       ...(current.sessionDefaults ?? {}),
       bundleId: normalized,
+      ...(deviceType ? { deviceType } : {}),
     },
   };
 

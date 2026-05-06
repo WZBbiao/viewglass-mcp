@@ -66,13 +66,31 @@ export const defaultExec: ExecFn = (file, args, opts) =>
  */
 export async function runCLI(
   args: string[],
-  opts: { session?: string; timeoutMs?: number; exec?: ExecFn } = {}
+  opts: { session?: string; timeoutMs?: number; exec?: ExecFn; projectCwd?: string } = {}
 ): Promise<RunResult> {
   const exec = opts.exec ?? defaultExec;
   const sessionArgs = opts.session ? ["--session", opts.session] : [];
   const fullArgs = [...args, ...sessionArgs];
   const timeout = opts.timeoutMs ?? 15_000;
   const startedAt = Date.now();
+  try {
+    return await runCLIOnce(exec, fullArgs, timeout, startedAt);
+  } catch (error: unknown) {
+    const retrySession = await recoverSessionAfterFailure(opts.session, error, exec, opts.projectCwd);
+    if (!retrySession || retrySession === opts.session) {
+      throw error;
+    }
+    const retryArgs = [...args, "--session", retrySession];
+    return await runCLIOnce(exec, retryArgs, timeout, Date.now());
+  }
+}
+
+async function runCLIOnce(
+  exec: ExecFn,
+  fullArgs: string[],
+  timeout: number,
+  startedAt: number
+): Promise<RunResult> {
   logCliStart(VIEWGLASS_BIN, fullArgs, timeout);
   try {
     const result = await exec(VIEWGLASS_BIN, fullArgs, { timeout });
@@ -103,7 +121,10 @@ export async function runCLI(
  * Auto-detect the first running Viewglass session.
  * Returns "bundleId@port" or undefined if none found.
  */
-export async function detectSession(exec?: ExecFn): Promise<string | undefined> {
+export async function detectSession(
+  exec?: ExecFn,
+  projectCwd: string = process.cwd()
+): Promise<string | undefined> {
   const fn = exec ?? defaultExec;
   try {
     const { stdout } = await fn(VIEWGLASS_BIN, ["apps", "list", "--json"], {
@@ -115,7 +136,7 @@ export async function detectSession(exec?: ExecFn): Promise<string | undefined> 
       port: number;
     }>;
 
-    const config = loadProjectConfig();
+    const config = loadProjectConfig(projectCwd);
     const bundleId = config?.sessionDefaults?.bundleId?.trim();
     const preferredDeviceType = config?.sessionDefaults?.deviceType;
     if (bundleId) {
@@ -151,14 +172,69 @@ function choosePreferredApp<T extends { deviceType?: string }>(
   return apps.find((app) => app.deviceType === "device") ?? apps[0];
 }
 
+function bundleIdFromSession(session?: string): string | undefined {
+  if (!session) return undefined;
+  const at = session.lastIndexOf("@");
+  if (at <= 0) return undefined;
+  return session.slice(0, at);
+}
+
+function staleSessionError(error: unknown): boolean {
+  const err = error as { stdout?: string; stderr?: string; message?: string };
+  const text = [err.stderr, err.stdout, err.message, String(error)]
+    .filter(Boolean)
+    .join("\n")
+    .toLowerCase();
+  return [
+    "session not connected",
+    "connection failed",
+    "connect failed",
+    "connection closed",
+    "connection reset",
+    "connection refused",
+    "app not found",
+  ].some((needle) => text.includes(needle));
+}
+
+async function recoverSessionAfterFailure(
+  session: string | undefined,
+  error: unknown,
+  exec: ExecFn,
+  projectCwd: string = process.cwd()
+): Promise<string | undefined> {
+  if (!staleSessionError(error)) return undefined;
+  const bundleId = bundleIdFromSession(session);
+  if (!bundleId) return undefined;
+
+  try {
+    const { stdout } = await exec(VIEWGLASS_BIN, ["apps", "list", "--json"], {
+      timeout: 15_000,
+    });
+    const apps = JSON.parse(stdout) as Array<{
+      bundleIdentifier: string;
+      deviceType?: string;
+      port: number;
+    }>;
+    const config = loadProjectConfig(projectCwd);
+    const preferredDeviceType = config?.sessionDefaults?.deviceType;
+    const matches = apps.filter((app) => app.bundleIdentifier === bundleId);
+    const app = choosePreferredApp(matches, preferredDeviceType);
+    if (!app) return undefined;
+    return `${app.bundleIdentifier}@${app.port}`;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Resolve session: use provided value, or auto-detect, or throw.
  */
 export async function resolveSession(
   session?: string,
-  exec?: ExecFn
+  exec?: ExecFn,
+  projectCwd: string = process.cwd()
 ): Promise<string> {
-  const s = session ?? (await detectSession(exec));
+  const s = session ?? (await detectSession(exec, projectCwd));
   if (!s) {
     throw new Error(
       "No Viewglass session found. Start the app with Viewglass enabled, or pass session as bundleId@port."

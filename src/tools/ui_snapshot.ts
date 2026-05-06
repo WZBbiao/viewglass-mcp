@@ -215,17 +215,18 @@ export interface UISnapshotOutput {
  */
 export async function uiSnapshot(
   input: UISnapshotInput,
-  exec?: ExecFn
+  exec?: ExecFn,
+  projectCwd: string = process.cwd()
 ): Promise<UISnapshotOutput> {
-  const session = await resolveSession(input.session, exec);
+  const session = await resolveSession(input.session, exec, projectCwd);
   const args = ["hierarchy", "--json"];
   if (input.filter) args.push("--filter", input.filter);
-  const { stdout } = await runCLI(args, { session, exec });
+  const { stdout } = await runCLI(args, { session, exec, projectCwd });
   const hierarchy = parseJSON<RawHierarchy>(stdout, "ui_snapshot");
   const compact = input.compact !== false;
   const mode: UISnapshotMode = compact ? (input.mode ?? "actionIndex") : "fullIndex";
   const maxNodes = resolveNodeLimit({ mode, filter: input.filter, maxNodes: input.maxNodes, compact });
-  return buildAgentSnapshot(hierarchy, session, compact, maxNodes, mode);
+  return buildAgentSnapshot(hierarchy, session, compact, maxNodes, mode, projectCwd);
 }
 
 function resolveNodeLimit(input: {
@@ -250,7 +251,8 @@ function buildAgentSnapshot(
   session: string,
   compact: boolean,
   maxNodes: number,
-  mode: UISnapshotMode
+  mode: UISnapshotMode,
+  projectCwd: string
 ): UISnapshotOutput {
   const rawNodes = flattenTrees(hierarchy.windows);
   const nodesByOid = new Map(rawNodes.map((node) => [node.oid, node]));
@@ -318,7 +320,7 @@ function buildAgentSnapshot(
       nodes: allNodes,
       rawTree: undefined,
     },
-    loadProjectRecipes()
+    loadProjectRecipes(projectCwd)
   );
 
   return partial;

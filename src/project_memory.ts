@@ -45,6 +45,10 @@ function dedupe(values: Array<string | undefined | null>): string[] {
   return out;
 }
 
+function parseDeviceType(value: unknown): "device" | "simulator" | undefined {
+  return value === "device" || value === "simulator" ? value : undefined;
+}
+
 function slug(input: string): string {
   return input.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40) || "flow";
 }
@@ -133,8 +137,8 @@ function appendRecipeDraft(recipe: {
   steps: FlowStepDraft[];
   successControllerHints: string[];
   successVisibleText: string[];
-}): void {
-  const configPath = saveProjectBundleId(recipe.bundleId);
+}, projectCwd: string): void {
+  const configPath = saveProjectBundleId(recipe.bundleId, projectCwd);
   if (!configPath) return;
   const recipesPath = path.join(path.dirname(configPath), "recipes.yaml");
   if (!fs.existsSync(recipesPath)) {
@@ -251,7 +255,7 @@ function fingerprintFlow(flow: FlowDraftState, triggerTool: string): string {
   return `${flow.bundleId}::${triggerTool}::${core}`;
 }
 
-function maybePersistFlowDraft(session: string, triggerTool: string): void {
+function maybePersistFlowDraft(session: string, triggerTool: string, projectCwd: string): void {
   const flow = flowBySession.get(session);
   if (!flow || flow.steps.length < 2) return;
   if (Date.now() - Date.parse(flow.updatedAt) > FLOW_GAP_MS) return;
@@ -276,7 +280,7 @@ function maybePersistFlowDraft(session: string, triggerTool: string): void {
     steps: flow.steps,
     successControllerHints: latest?.summary.controllerHints.slice(0, 4) ?? [],
     successVisibleText: latest?.summary.visibleText.slice(0, MAX_VISIBLE_TEXT) ?? [],
-  });
+  }, projectCwd);
 
   flow.lastPersistedFingerprint = fingerprint;
   flow.steps = [];
@@ -289,19 +293,27 @@ export function resetProjectMemoryState(): void {
   flowBySession.clear();
 }
 
-export function noteSuccessfulTool(name: string, args: unknown, parsed: unknown): void {
+export function noteSuccessfulTool(
+  name: string,
+  args: unknown,
+  parsed: unknown,
+  projectCwd: string = process.cwd()
+): void {
   if (!parsed || typeof parsed !== "object") return;
 
   if (name === "ui_connect") {
     const bundleId = (parsed as { bundleId?: unknown }).bundleId;
-    if (typeof bundleId === "string") saveProjectBundleId(bundleId);
+    const deviceType = (parsed as { deviceType?: unknown }).deviceType;
+    if (typeof bundleId === "string") {
+      saveProjectBundleId(bundleId, projectCwd, parseDeviceType(deviceType));
+    }
     return;
   }
 
   if (name === "ui_scan") {
     const sessions = (parsed as UIScanResult).sessions;
     if (Array.isArray(sessions) && sessions.length === 1 && typeof sessions[0]?.bundleId === "string") {
-      saveProjectBundleId(sessions[0].bundleId);
+      saveProjectBundleId(sessions[0].bundleId, projectCwd, sessions[0].deviceType);
     }
     return;
   }
@@ -310,7 +322,7 @@ export function noteSuccessfulTool(name: string, args: unknown, parsed: unknown)
     const snapshot = parsed as UISnapshotOutput;
     const session = snapshot.app?.session;
     if (typeof snapshot.app?.bundleIdentifier === "string") {
-      saveProjectBundleId(snapshot.app.bundleIdentifier);
+      saveProjectBundleId(snapshot.app.bundleIdentifier, projectCwd, parseDeviceType(snapshot.app.deviceType));
     }
     if (typeof session === "string" && session.trim()) {
       latestSnapshotBySession.set(session, snapshot);
@@ -343,6 +355,6 @@ export function noteSuccessfulTool(name: string, args: unknown, parsed: unknown)
   }
 
   if (["ui_wait", "ui_assert", "ui_attr_get"].includes(name)) {
-    maybePersistFlowDraft(session, name);
+    maybePersistFlowDraft(session, name, projectCwd);
   }
 }

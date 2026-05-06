@@ -1,13 +1,20 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { uiConnect } from "../tools/ui_connect.js";
 import type { ExecFn } from "../runner.js";
 
 const APPS = [
-  { bundleIdentifier: "com.wzb.ViewglassDemo", port: 1234 },
-  { bundleIdentifier: "com.myapp.FooApp", port: 5678 },
+  { bundleIdentifier: "com.wzb.ViewglassDemo", port: 1234, deviceType: "simulator" as const },
+  {
+    bundleIdentifier: "com.myapp.FooApp",
+    port: 5678,
+    deviceType: "device" as const,
+    deviceName: "iPhone",
+    deviceIdentifier: "UDID-1",
+    serverVersion: "1.2.3",
+  },
 ];
 
 function makeExec(apps: typeof APPS, error?: Error): ExecFn {
@@ -17,10 +24,6 @@ function makeExec(apps: typeof APPS, error?: Error): ExecFn {
   });
 }
 
-afterEach(() => {
-  vi.unstubAllEnvs();
-});
-
 describe("uiConnect", () => {
   it("returns session for exact bundleId match", async () => {
     const exec = makeExec(APPS);
@@ -28,6 +31,10 @@ describe("uiConnect", () => {
     expect(result.session).toBe("com.myapp.FooApp@5678");
     expect(result.bundleId).toBe("com.myapp.FooApp");
     expect(result.port).toBe(5678);
+    expect(result.deviceType).toBe("device");
+    expect(result.deviceName).toBe("iPhone");
+    expect(result.deviceIdentifier).toBe("UDID-1");
+    expect(result.serverVersion).toBe("1.2.3");
   });
 
   it("returns session for partial bundleId match", async () => {
@@ -51,16 +58,15 @@ describe("uiConnect", () => {
   it("persists the resolved bundle id into .viewglassmcp/config.yaml", async () => {
     const project = fs.mkdtempSync(path.join(os.tmpdir(), "viewglass-connect-"));
     fs.mkdirSync(path.join(project, ".git"));
-    vi.stubEnv("PWD", project);
-    process.chdir(project);
 
     const exec = makeExec(APPS);
-    const result = await uiConnect({ bundleId: "FooApp" }, exec);
+    const result = await uiConnect({ bundleId: "FooApp" }, exec, project);
     expect(result.bundleId).toBe("com.myapp.FooApp");
 
     const configPath = path.join(project, ".viewglassmcp", "config.yaml");
     expect(fs.existsSync(configPath)).toBe(true);
     expect(fs.readFileSync(configPath, "utf8")).toContain('bundleId: "com.myapp.FooApp"');
+    expect(fs.readFileSync(configPath, "utf8")).toContain('deviceType: "device"');
   });
 
   it("throws with available list when app not found", async () => {

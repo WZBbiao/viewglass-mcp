@@ -69,20 +69,17 @@ function makeSnapshot(session = "com.example.app@47175"): UISnapshotOutput {
 
 afterEach(() => {
   resetProjectMemoryState();
-  delete process.env.PWD;
 });
 
 describe("project memory auto persistence", () => {
   it("auto-persists bundleId from a single-session ui_scan result", () => {
     const project = fs.mkdtempSync(path.join(os.tmpdir(), "viewglass-scan-"));
     fs.mkdirSync(path.join(project, ".git"));
-    process.chdir(project);
-    process.env.PWD = project;
 
     noteSuccessfulTool("ui_scan", {}, {
       sessions: [{ bundleId: "com.example.app", port: 47175, session: "com.example.app@47175" }],
       message: "ok",
-    });
+    }, project);
 
     const configPath = path.join(project, ".viewglassmcp", "config.yaml");
     expect(fs.existsSync(configPath)).toBe(true);
@@ -92,13 +89,11 @@ describe("project memory auto persistence", () => {
   it("auto-appends a recipe draft after a successful flow confirmation", () => {
     const project = fs.mkdtempSync(path.join(os.tmpdir(), "viewglass-recipe-"));
     fs.mkdirSync(path.join(project, ".git"));
-    process.chdir(project);
-    process.env.PWD = project;
 
-    noteSuccessfulTool("ui_snapshot", {}, makeSnapshot());
-    noteSuccessfulTool("ui_tap", { oid: "101", session: "com.example.app@47175" }, { ok: true, oid: "101" });
-    noteSuccessfulTool("ui_input", { oid: "102", text: "secret@example.com", session: "com.example.app@47175" }, { ok: true, oid: "102", text: "secret@example.com" });
-    noteSuccessfulTool("ui_wait", { mode: "appears", locator: "Profile", session: "com.example.app@47175" }, { met: true, condition: "appears:Profile", elapsedSeconds: 0.1, pollCount: 1 });
+    noteSuccessfulTool("ui_snapshot", {}, makeSnapshot(), project);
+    noteSuccessfulTool("ui_tap", { oid: "101", session: "com.example.app@47175" }, { ok: true, oid: "101" }, project);
+    noteSuccessfulTool("ui_input", { oid: "102", text: "secret@example.com", session: "com.example.app@47175" }, { ok: true, oid: "102", text: "secret@example.com" }, project);
+    noteSuccessfulTool("ui_wait", { mode: "appears", locator: "Profile", session: "com.example.app@47175" }, { met: true, condition: "appears:Profile", elapsedSeconds: 0.1, pollCount: 1 }, project);
 
     const recipesPath = path.join(project, ".viewglassmcp", "recipes.yaml");
     const content = fs.readFileSync(recipesPath, "utf8");

@@ -16,6 +16,10 @@ export interface UIConnectResult {
   session: string;
   bundleId: string;
   port: number;
+  deviceType?: "device" | "simulator";
+  deviceName?: string;
+  deviceIdentifier?: string;
+  serverVersion?: string;
 }
 
 /**
@@ -25,11 +29,19 @@ export interface UIConnectResult {
  */
 export async function uiConnect(
   input: UIConnectInput,
-  exec?: ExecFn
+  exec?: ExecFn,
+  projectCwd: string = process.cwd()
 ): Promise<UIConnectResult> {
   const fn = exec ?? defaultExec;
 
-  let apps: Array<{ bundleIdentifier: string; port: number }> = [];
+  let apps: Array<{
+    bundleIdentifier: string;
+    port: number;
+    deviceType?: "device" | "simulator";
+    deviceName?: string;
+    deviceIdentifier?: string;
+    serverVersion?: string;
+  }> = [];
   try {
     const { stdout } = await fn(VIEWGLASS_BIN, ["apps", "list", "--json"], {
       timeout: 8_000,
@@ -61,11 +73,15 @@ export async function uiConnect(
     );
   }
 
-  saveProjectBundleId(match.bundleIdentifier);
+  saveProjectBundleId(match.bundleIdentifier, projectCwd, match.deviceType);
 
   return {
     session: `${match.bundleIdentifier}@${match.port}`,
     bundleId: match.bundleIdentifier,
     port: match.port,
+    deviceType: match.deviceType,
+    deviceName: match.deviceName,
+    deviceIdentifier: match.deviceIdentifier,
+    serverVersion: match.serverVersion,
   };
 }

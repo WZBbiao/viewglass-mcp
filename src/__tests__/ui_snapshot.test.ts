@@ -358,29 +358,28 @@ function makeExec(stdout: string, error?: Error): ExecFn {
   });
 }
 
-const originalCwd = process.cwd();
 let testProject: string | undefined;
 
 beforeEach(() => {
   testProject = fs.mkdtempSync(path.join(os.tmpdir(), "viewglass-snapshot-test-"));
   fs.mkdirSync(path.join(testProject, ".git"));
-  process.chdir(testProject);
-  process.env.PWD = testProject;
 });
 
 afterEach(() => {
-  process.chdir(originalCwd);
-  delete process.env.PWD;
   if (testProject) {
     fs.rmSync(testProject, { recursive: true, force: true });
     testProject = undefined;
   }
 });
 
+function uiSnapshotInProject(input: Parameters<typeof uiSnapshot>[0], exec?: ExecFn) {
+  return uiSnapshot(input, exec, testProject!);
+}
+
 describe("uiSnapshot", () => {
   it("calls hierarchy --json with session", async () => {
     const exec = makeExec(JSON.stringify(hierarchyFixture)) as ReturnType<typeof vi.fn>;
-    await uiSnapshot({ session: "com.test@1234" }, exec);
+    await uiSnapshotInProject({ session: "com.test@1234" }, exec);
     const call = exec.mock.calls.find((c: unknown[]) => (c[1] as string[]).includes("hierarchy")) as [string, string[], unknown] | undefined;
     expect(call).toBeDefined();
     expect(call![1]).toContain("hierarchy");
@@ -392,7 +391,7 @@ describe("uiSnapshot", () => {
 
   it("appends --filter when provided", async () => {
     const exec = makeExec(JSON.stringify(hierarchyFixture)) as ReturnType<typeof vi.fn>;
-    await uiSnapshot({ session: "com.test@1234", filter: "UILabel" }, exec);
+    await uiSnapshotInProject({ session: "com.test@1234", filter: "UILabel" }, exec);
     const call = exec.mock.calls.find((c: unknown[]) => (c[1] as string[]).includes("hierarchy")) as [string, string[], unknown] | undefined;
     expect(call![1]).toContain("--filter");
     expect(call![1]).toContain("UILabel");
@@ -400,7 +399,7 @@ describe("uiSnapshot", () => {
 
   it("returns agent-first snapshot structure", async () => {
     const exec = makeExec(JSON.stringify(hierarchyFixture));
-    const result = await uiSnapshot({ session: "com.test@1234" }, exec);
+    const result = await uiSnapshotInProject({ session: "com.test@1234" }, exec);
 
     expect(result.app.bundleIdentifier).toBe("com.test");
     expect(result.snapshot.snapshotId).toBe("snap-1");
@@ -432,7 +431,7 @@ describe("uiSnapshot", () => {
 
   it("budgets compact nodes and surfaces unlabeled edge navigation candidates", async () => {
     const exec = makeExec(JSON.stringify(makeNoisyHierarchy()));
-    const result = await uiSnapshot({ session: "com.test@1234" }, exec);
+    const result = await uiSnapshotInProject({ session: "com.test@1234" }, exec);
 
     expect(result.snapshot.totalNodeCount).toBeGreaterThan(80);
     expect(result.snapshot.returnedNodeCount).toBeLessThanOrEqual(24);
@@ -453,14 +452,14 @@ describe("uiSnapshot", () => {
     const settingsNode = result.nodes.find((node) => node.oid === 50);
     expect(settingsNode?.actions).toContain("tap");
 
-    const fullResult = await uiSnapshot({ session: "com.test@1234", mode: "fullIndex", maxNodes: 0 }, exec);
+    const fullResult = await uiSnapshotInProject({ session: "com.test@1234", mode: "fullIndex", maxNodes: 0 }, exec);
     expect(fullResult.snapshot.truncated).toBe(false);
     expect(fullResult.nodes.length).toBeGreaterThan(result.nodes.length);
   });
 
   it("normalizes local frames to screen coordinates and surfaces primary actions", async () => {
     const exec = makeExec(JSON.stringify(makeNestedActionHierarchy()));
-    const result = await uiSnapshot({ session: "com.test@1234", maxNodes: 0 }, exec);
+    const result = await uiSnapshotInProject({ session: "com.test@1234", maxNodes: 0 }, exec);
 
     const createPost = result.nodes.find((node) => node.oid === 301);
     expect(createPost?.frame).toEqual({ x: 50, y: 320, width: 120, height: 44 });
@@ -500,7 +499,7 @@ describe("uiSnapshot", () => {
     });
 
     const exec = makeExec(JSON.stringify(hierarchy));
-    const result = await uiSnapshot({ session: "com.test@1234", maxNodes: 0 }, exec);
+    const result = await uiSnapshotInProject({ session: "com.test@1234", maxNodes: 0 }, exec);
 
     expect(result.snapshot.mode).toBe("actionIndex");
     expect(result.snapshot.nodeLimit).toBe(24);
@@ -539,7 +538,7 @@ recipes:
       "utf8"
     );
     const exec = makeExec(JSON.stringify(hierarchyFixture));
-    const result = await uiSnapshot({ session: "com.test@1234" }, exec);
+    const result = await uiSnapshotInProject({ session: "com.test@1234" }, exec);
 
     expect(result.matchedRecipes).toHaveLength(1);
     expect(result.matchedRecipes[0]?.id).toBe("switch_to_me");
@@ -548,26 +547,26 @@ recipes:
 
   it("omits rawTree by default", async () => {
     const exec = makeExec(JSON.stringify(hierarchyFixture));
-    const result = await uiSnapshot({ session: "com.test@1234" }, exec);
+    const result = await uiSnapshotInProject({ session: "com.test@1234" }, exec);
     expect(result.rawTree).toBeUndefined();
   });
 
   it("includes rawTree when compact=false", async () => {
     const exec = makeExec(JSON.stringify(hierarchyFixture));
-    const result = await uiSnapshot({ session: "com.test@1234", compact: false }, exec);
+    const result = await uiSnapshotInProject({ session: "com.test@1234", compact: false }, exec);
     expect(result.rawTree?.snapshotId).toBe("snap-1");
   });
 
   it("auto-detects session when not provided", async () => {
     const exec = makeExec(JSON.stringify(hierarchyFixture)) as ReturnType<typeof vi.fn>;
-    await uiSnapshot({}, exec);
+    await uiSnapshotInProject({}, exec);
     const appsCalls = exec.mock.calls.filter((c: unknown[]) => (c[1] as string[]).includes("list"));
     expect(appsCalls.length).toBe(1);
   });
 
   it("throws when CLI returns invalid JSON", async () => {
     const exec = makeExec("not json");
-    await expect(uiSnapshot({ session: "com.test@1234" }, exec)).rejects.toThrow(
+    await expect(uiSnapshotInProject({ session: "com.test@1234" }, exec)).rejects.toThrow(
       "Failed to parse JSON from 'ui_snapshot'"
     );
   });

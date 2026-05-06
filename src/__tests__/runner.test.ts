@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import process from "node:process";
 import { describe, it, expect, vi } from "vitest";
 import { detectSession, resolveSession, parseJSON, runCLI } from "../runner.js";
 import type { ExecFn, RunResult } from "../runner.js";
@@ -46,18 +45,12 @@ describe("detectSession", () => {
       'schemaVersion: 1\nsessionDefaults:\n  bundleId: "com.target.app"\n',
       'utf8'
     );
-    const originalCwd = process.cwd();
-    process.chdir(project);
-    try {
-      const exec = makeExec({ stdout: JSON.stringify([
-        { bundleIdentifier: "com.other.App", port: 1111 },
-        { bundleIdentifier: "com.target.app", port: 2222 }
-      ]) });
-      expect(await detectSession(exec)).toBe("com.target.app@2222");
-    } finally {
-      process.chdir(originalCwd);
-      fs.rmSync(tempRoot, { recursive: true, force: true });
-    }
+    const exec = makeExec({ stdout: JSON.stringify([
+      { bundleIdentifier: "com.other.App", port: 1111 },
+      { bundleIdentifier: "com.target.app", port: 2222 }
+    ]) });
+    expect(await detectSession(exec, project)).toBe("com.target.app@2222");
+    fs.rmSync(tempRoot, { recursive: true, force: true });
   });
 
   it("honors configured deviceType when multiple sessions match bundleId", async () => {
@@ -69,18 +62,12 @@ describe("detectSession", () => {
       'schemaVersion: 1\nsessionDefaults:\n  bundleId: "com.target.app"\n  deviceType: "simulator"\n',
       'utf8'
     );
-    const originalCwd = process.cwd();
-    process.chdir(project);
-    try {
-      const exec = makeExec({ stdout: JSON.stringify([
-        { bundleIdentifier: "com.target.app", deviceType: "device", port: 47175 },
-        { bundleIdentifier: "com.target.app", deviceType: "simulator", port: 47165 },
-      ]) });
-      expect(await detectSession(exec)).toBe("com.target.app@47165");
-    } finally {
-      process.chdir(originalCwd);
-      fs.rmSync(tempRoot, { recursive: true, force: true });
-    }
+    const exec = makeExec({ stdout: JSON.stringify([
+      { bundleIdentifier: "com.target.app", deviceType: "device", port: 47175 },
+      { bundleIdentifier: "com.target.app", deviceType: "simulator", port: 47165 },
+    ]) });
+    expect(await detectSession(exec, project)).toBe("com.target.app@47165");
+    fs.rmSync(tempRoot, { recursive: true, force: true });
   });
 });
 
@@ -128,5 +115,38 @@ describe("runCLI", () => {
     await runCLI(["apps", "list", "--json"], { exec });
     const call = exec.mock.calls[0] as [string, string[], { timeout: number }];
     expect(call[1]).not.toContain("--session");
+  });
+
+  it("re-detects same bundle and retries once when a bundle@port session is stale", async () => {
+    const staleError = Object.assign(new Error("Command failed"), {
+      stderr: "Session not connected",
+      code: 20,
+    });
+    const exec = vi.fn()
+      .mockRejectedValueOnce(staleError)
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          { bundleIdentifier: "com.test.App", deviceType: "device", port: 47175 },
+        ]),
+        stderr: "",
+      })
+      .mockResolvedValueOnce({ stdout: "{\"ok\":true}", stderr: "" }) as unknown as ReturnType<typeof vi.fn> & ExecFn;
+
+    const result = await runCLI(["hierarchy", "--json"], { session: "com.test.App@47164", exec });
+
+    expect(result.stdout).toBe("{\"ok\":true}");
+    expect(exec).toHaveBeenCalledTimes(3);
+    expect(exec.mock.calls[0][1]).toEqual(["hierarchy", "--json", "--session", "com.test.App@47164"]);
+    expect(exec.mock.calls[1][1]).toEqual(["apps", "list", "--json"]);
+    expect(exec.mock.calls[2][1]).toEqual(["hierarchy", "--json", "--session", "com.test.App@47175"]);
+  });
+
+  it("does not retry non-session failures", async () => {
+    const error = Object.assign(new Error("Unknown selector"), { stderr: "selector not found", code: 40 });
+    const exec = vi.fn().mockRejectedValue(error) as unknown as ReturnType<typeof vi.fn> & ExecFn;
+
+    await expect(runCLI(["invoke", "1", "missing"], { session: "com.test.App@47164", exec }))
+      .rejects.toThrow("Unknown selector");
+    expect(exec).toHaveBeenCalledTimes(1);
   });
 });
