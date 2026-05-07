@@ -12,10 +12,21 @@ function makeExec(result: Partial<RunResult> | Error): ExecFn {
   });
 }
 
+async function withTempProject<T>(fn: (project: string) => Promise<T> | T): Promise<T> {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), "viewglass-runner-test-"));
+  try {
+    return await fn(project);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+}
+
 describe("detectSession", () => {
   it("returns bundleId@port for first app", async () => {
     const exec = makeExec({ stdout: JSON.stringify([{ bundleIdentifier: "com.test.App", port: 47164 }]) });
-    expect(await detectSession(exec)).toBe("com.test.App@47164");
+    await withTempProject(async (project) => {
+      expect(await detectSession(exec, project)).toBe("com.test.App@47164");
+    });
   });
 
   it("prefers physical devices when auto-detecting without a deviceType override", async () => {
@@ -23,7 +34,9 @@ describe("detectSession", () => {
       { bundleIdentifier: "com.test.App", deviceType: "simulator", port: 47164 },
       { bundleIdentifier: "com.test.App", deviceType: "device", port: 47175 },
     ]) });
-    expect(await detectSession(exec)).toBe("com.test.App@47175");
+    await withTempProject(async (project) => {
+      expect(await detectSession(exec, project)).toBe("com.test.App@47175");
+    });
   });
 
   it("returns undefined when app list is empty", async () => {
@@ -80,12 +93,16 @@ describe("resolveSession", () => {
 
   it("auto-detects when no session provided", async () => {
     const exec = makeExec({ stdout: JSON.stringify([{ bundleIdentifier: "com.auto.App", port: 9999 }]) });
-    expect(await resolveSession(undefined, exec)).toBe("com.auto.App@9999");
+    await withTempProject(async (project) => {
+      expect(await resolveSession(undefined, exec, project)).toBe("com.auto.App@9999");
+    });
   });
 
   it("throws when no session and no app running", async () => {
     const exec = makeExec({ stdout: "[]" });
-    await expect(resolveSession(undefined, exec)).rejects.toThrow("No Viewglass session");
+    await withTempProject(async (project) => {
+      await expect(resolveSession(undefined, exec, project)).rejects.toThrow("No Viewglass session");
+    });
   });
 });
 
@@ -139,6 +156,29 @@ describe("runCLI", () => {
     expect(exec.mock.calls[0][1]).toEqual(["hierarchy", "--json", "--session", "com.test.App@47164"]);
     expect(exec.mock.calls[1][1]).toEqual(["apps", "list", "--json"]);
     expect(exec.mock.calls[2][1]).toEqual(["hierarchy", "--json", "--session", "com.test.App@47175"]);
+  });
+
+  it("re-detects and retries once after a true-device USB read timeout", async () => {
+    const timeoutError = Object.assign(new Error("Command failed"), {
+      stdout: JSON.stringify({ code: 72, error: true, message: "Protocol error: USB read timeout after 5.0s" }),
+      code: 72,
+    });
+    const exec = vi.fn()
+      .mockRejectedValueOnce(timeoutError)
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          { bundleIdentifier: "com.test.App", deviceType: "device", port: 47175 },
+        ]),
+        stderr: "",
+      })
+      .mockResolvedValueOnce({ stdout: "{\"ok\":true}", stderr: "" }) as unknown as ReturnType<typeof vi.fn> & ExecFn;
+
+    const result = await runCLI(["tap", "42", "--json"], { session: "com.test.App@47164", exec });
+
+    expect(result.stdout).toBe("{\"ok\":true}");
+    expect(exec).toHaveBeenCalledTimes(3);
+    expect(exec.mock.calls[1][1]).toEqual(["apps", "list", "--json"]);
+    expect(exec.mock.calls[2][1]).toEqual(["tap", "42", "--json", "--session", "com.test.App@47175"]);
   });
 
   it("does not retry non-session failures", async () => {

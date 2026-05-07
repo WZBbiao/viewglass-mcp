@@ -134,7 +134,8 @@ server.registerTool(
     description:
       "Capture the current UI as an agent-first snapshot. " +
       "Default output is a small action index: app/session metadata, visible text summary, inferred switcher/navigation groups, " +
-      "navigationCandidates for top/bottom entry points, a budgeted list of actionable nodes with searchableText/actionTargetOid fields, " +
+      "navigationCandidates for top/bottom entry points, inputCandidates with exact inputTargetOid values, " +
+      "a budgeted list of actionable nodes with searchableText/actionTargetOid fields, " +
       "and matched project-local recipes when available, so agents can " +
       "find targets without guessing UIKit class names. " +
       "Best practice: for any navigation or custom UI task, call ui_snapshot first to understand the current page, " +
@@ -420,12 +421,14 @@ server.registerTool(
       "  'attr'    — wait until a node attribute equals/contains a value. " +
       "Returns { met, condition, elapsedSeconds, pollCount }. " +
       "Use after navigation, async data loads, or animations. " +
+      "In gone mode, plain locators are treated as text/accessibility queries to avoid false negatives from stale class names; " +
+      "use an explicit class locator such as .UILabel when waiting for a class to disappear. " +
       "If met:false (timeout), tool returns isError:true.",
     inputSchema: {
       mode: z.enum(["appears", "gone", "attr"]).describe("Wait mode."),
       locator: z
         .string()
-        .describe("Plain locator string: visible text, accessibility identifier, class name, or numeric oid."),
+        .describe("Locator string: visible text, accessibility identifier, explicit class locator such as .UILabel, or numeric oid."),
       key: z
         .string()
         .optional()

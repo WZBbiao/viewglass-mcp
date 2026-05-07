@@ -188,6 +188,7 @@ interface SnapshotNodeLike {
   visible?: boolean;
   interactive?: boolean;
   actionTargetOid?: number | string;
+  inputTargetOid?: number | string;
   groupId?: string;
   frame?: unknown;
 }
@@ -209,6 +210,7 @@ interface SnapshotLike {
     interactiveNodeCount?: number;
     controllerHints?: string[];
     navigationCandidates?: unknown[];
+    inputCandidates?: unknown[];
     bottomBarCandidates?: unknown[];
     groupCount?: number;
   };
@@ -254,6 +256,7 @@ function summarizeSnapshot(parsed: SnapshotLike) {
     visible: node.visible,
     interactive: node.interactive,
     actionTargetOid: node.actionTargetOid,
+    inputTargetOid: node.inputTargetOid,
     groupId: node.groupId,
     frame: node.frame,
   }));
@@ -267,6 +270,7 @@ function summarizeSnapshot(parsed: SnapshotLike) {
           interactiveNodeCount: parsed.summary.interactiveNodeCount,
           controllerHints: parsed.summary.controllerHints,
           navigationCandidates: limitArray(parsed.summary.navigationCandidates, 20),
+          inputCandidates: limitArray(parsed.summary.inputCandidates, 12),
           bottomBarCandidates: limitArray(parsed.summary.bottomBarCandidates, 12),
           groupCount: parsed.summary.groupCount,
         }

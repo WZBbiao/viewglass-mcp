@@ -474,6 +474,45 @@ describe("uiSnapshot", () => {
     );
   });
 
+  it("surfaces exact input candidates with inputTargetOid", async () => {
+    const hierarchy = structuredClone(hierarchyFixture);
+    const contentTree = hierarchy.windows[0].children[0];
+    contentTree.node.childrenOids.push(500);
+    contentTree.children.push({
+      node: {
+        oid: 500,
+        primaryOid: 500,
+        oidType: "view",
+        className: "TapUIKit.TapTextView",
+        frame: { x: 24, y: 260, width: 342, height: 96 },
+        bounds: { x: 0, y: 0, width: 342, height: 96 },
+        isHidden: false,
+        alpha: 1,
+        isUserInteractionEnabled: true,
+        childrenOids: [],
+        parentOid: 10,
+        customDisplayTitle: "Write a review",
+        attributeGroups: [],
+      },
+      children: [],
+    });
+
+    const exec = makeExec(JSON.stringify(hierarchy));
+    const result = await uiSnapshotInProject({ session: "com.test@1234", maxNodes: 0 }, exec);
+
+    const candidate = result.summary.inputCandidates?.find((item) => item.oid === 500);
+    expect(candidate).toEqual(expect.objectContaining({
+      oid: 500,
+      inputTargetOid: 500,
+      className: "TapUIKit.TapTextView",
+      role: "input",
+    }));
+
+    const node = result.nodes.find((item) => item.oid === 500);
+    expect(node?.actions).toContain("input");
+    expect(node?.inputTargetOid).toBe(500);
+  });
+
   it("keeps default action index small when maxNodes=0 and truncates long text", async () => {
     const hierarchy = makeNoisyHierarchy();
     const contentTree = hierarchy.windows[0].children[0];

@@ -587,9 +587,9 @@ async function runE2E() {
       if (!data.met) throw new Error("expected met:true for push_buttons_screen");
     });
 
-    await test("wait gone __nonexistent__ returns isError=true (timeout)", async () => {
+    await test("wait gone explicit .UILabel class returns isError=true (timeout)", async () => {
       const r = await client.callTool("ui_wait", {
-        mode: "gone", locator: "UILabel", timeout: 1, session: SESSION
+        mode: "gone", locator: ".UILabel", timeout: 1, session: SESSION
       });
       if (!r.isError) throw new Error("expected isError=true — UILabel never disappears");
     });

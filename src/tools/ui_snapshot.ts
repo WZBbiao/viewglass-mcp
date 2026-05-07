@@ -34,6 +34,7 @@ const MAX_ACTION_INDEX_NODE_LIMIT = 48;
 const DEFAULT_FULL_INDEX_NODE_LIMIT = 80;
 const FILTERED_FULL_INDEX_NODE_LIMIT = 160;
 const MAX_NAVIGATION_CANDIDATES = 8;
+const MAX_INPUT_CANDIDATES = 8;
 const MAX_VISIBLE_TEXT_ITEMS = 16;
 const MAX_TEXT_LENGTH = 96;
 const MAX_SEARCHABLE_TEXT_PER_NODE = 2;
@@ -124,6 +125,7 @@ interface UISnapshotNode {
   actions: string[];
   role: string;
   actionTargetOid: number;
+  inputTargetOid?: number;
   groupId?: string;
 }
 
@@ -152,6 +154,7 @@ interface UISnapshotSummary {
   interactiveNodeCount: number;
   controllerHints: string[];
   navigationCandidates?: UISnapshotNavigationCandidate[];
+  inputCandidates?: UISnapshotInputCandidate[];
   bottomBarCandidates: Array<{
     groupId: string;
     className?: string;
@@ -161,6 +164,17 @@ interface UISnapshotSummary {
     frame: RawRect;
   }>;
   groupCount: number;
+}
+
+interface UISnapshotInputCandidate {
+  oid: number;
+  inputTargetOid: number;
+  actionTargetOid: number;
+  label?: string;
+  className: string;
+  role: string;
+  areaHint: string;
+  frame: RawRect;
 }
 
 interface UISnapshotNavigationCandidate {
@@ -411,6 +425,7 @@ function buildSnapshotNode(
   const group = groupByActionOid.get(actionTargetOid);
   const actions = inferActions(node, actionTarget, interactive, searchableText);
   const role = inferRole(node, searchableText, actions, group);
+  const inputTargetOid = actions.includes("input") ? node.oid : undefined;
 
   return {
     id: `node_${node.oid}`,
@@ -429,6 +444,7 @@ function buildSnapshotNode(
     actions,
     role,
     actionTargetOid,
+    inputTargetOid,
     groupId: group?.id,
   };
 }
@@ -952,6 +968,7 @@ function buildSummary(
     : compactTextList(visibleTextSource, MAX_VISIBLE_TEXT_ITEMS);
   const controllerHints = dedupeStrings(nodes.map((node) => node.controllerClass ? compactClassName(node.controllerClass) : undefined)).slice(0, 8);
   const navigationCandidates = buildNavigationCandidates(nodes, hierarchy.screenSize);
+  const inputCandidates = buildInputCandidates(nodes, hierarchy.screenSize);
   const bottomBarCandidates = groups
     .filter((group) => group.role === "bottomNavigation")
     .map((group) => ({
@@ -968,9 +985,42 @@ function buildSummary(
     interactiveNodeCount: nodes.filter((node) => node.interactive).length,
     controllerHints,
     navigationCandidates,
+    inputCandidates,
     bottomBarCandidates,
     groupCount: groups.length,
   };
+}
+
+function buildInputCandidates(nodes: UISnapshotNode[], screenSize: RawRect): UISnapshotInputCandidate[] {
+  return nodes
+    .filter((node) => node.visible && node.actions.includes("input"))
+    .sort((a, b) => {
+      const scoreDelta = scoreInputCandidate(b, screenSize) - scoreInputCandidate(a, screenSize);
+      if (scoreDelta !== 0) return scoreDelta;
+      return sortNodes(a, b);
+    })
+    .slice(0, MAX_INPUT_CANDIDATES)
+    .sort(sortNodes)
+    .map((node) => ({
+      oid: node.oid,
+      inputTargetOid: node.inputTargetOid ?? node.oid,
+      actionTargetOid: node.actionTargetOid,
+      label: truncateText(node.text),
+      className: compactClassName(node.className),
+      role: node.role,
+      areaHint: areaHintForFrame(node.frame, screenSize),
+      frame: compactFrame(node.frame),
+    }));
+}
+
+function scoreInputCandidate(node: UISnapshotNode, screenSize: RawRect): number {
+  let score = 0;
+  if (intersectsScreen(node.frame, screenSize)) score += 80;
+  if (node.searchableText.length > 0) score += 35;
+  if (/TextView/i.test(node.className)) score += 30;
+  if (/TextField/i.test(node.className)) score += 25;
+  if (node.frame.width >= screenSize.width * 0.45) score += 10;
+  return score;
 }
 
 function buildNavigationCandidates(nodes: UISnapshotNode[], screenSize: RawRect): UISnapshotNavigationCandidate[] {

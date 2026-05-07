@@ -31,6 +31,52 @@ function makeExec(waitResult?: object): ExecFn {
   });
 }
 
+function hierarchyWithClassOnly(className: string) {
+  return {
+    appInfo: { appName: "FixtureApp", bundleIdentifier: "com.test", serverVersion: "0.1.0" },
+    fetchedAt: "2026-04-24T00:00:00Z",
+    screenScale: 3,
+    screenSize: { x: 0, y: 0, width: 390, height: 844 },
+    snapshotId: "snap-class-only",
+    windows: [
+      {
+        node: {
+          oid: 1,
+          primaryOid: 1,
+          oidType: "view",
+          className: "UIWindow",
+          frame: { x: 0, y: 0, width: 390, height: 844 },
+          bounds: { x: 0, y: 0, width: 390, height: 844 },
+          isHidden: false,
+          alpha: 1,
+          isUserInteractionEnabled: true,
+          childrenOids: [2],
+          attributeGroups: [],
+        },
+        children: [
+          {
+            node: {
+              oid: 2,
+              primaryOid: 2,
+              oidType: "view",
+              className,
+              frame: { x: 20, y: 20, width: 120, height: 44 },
+              bounds: { x: 0, y: 0, width: 120, height: 44 },
+              isHidden: false,
+              alpha: 1,
+              isUserInteractionEnabled: true,
+              childrenOids: [],
+              parentOid: 1,
+              attributeGroups: [],
+            },
+            children: [],
+          },
+        ],
+      },
+    ],
+  };
+}
+
 describe("uiWait - appears mode", () => {
   it("calls wait appears with locator", async () => {
     const exec = makeExec() as ReturnType<typeof vi.fn>;
@@ -79,6 +125,29 @@ describe("uiWait - gone mode", () => {
     await uiWait({ mode: "gone", locator: "#foo", session: "com.test@1234" }, exec);
     const waitCalls = (exec.mock.calls as [string, string[]][]).filter((c) => c[1][0] === "wait");
     expect(waitCalls[0][1][1]).toBe("gone");
+  });
+
+  it("does not treat plain gone locators as class names after visible text is already gone", async () => {
+    const exec = vi.fn().mockImplementation(async (_bin: string, args: string[]) => {
+      if (args[0] === "hierarchy") {
+        return { stdout: JSON.stringify(hierarchyWithClassOnly("TapTap.PublishButton")), stderr: "" };
+      }
+      return {
+        stdout: JSON.stringify({ met: true, condition: "gone:Publish", elapsedSeconds: 0.1, pollCount: 1 }),
+        stderr: "",
+      };
+    }) as unknown as ReturnType<typeof vi.fn> & ExecFn;
+
+    await uiWait({ mode: "gone", locator: "Publish", session: "com.test@1234" }, exec);
+    const waitCalls = (exec.mock.calls as [string, string[]][]).filter((c) => c[1][0] === "wait");
+    expect(waitCalls[0][1][2]).toBe('(#Publish OR contains:"Publish")');
+  });
+
+  it("keeps explicit class locators available in gone mode", async () => {
+    const exec = makeExec({ met: false, condition: "gone:.UILabel", elapsedSeconds: 1, pollCount: 2 }) as ReturnType<typeof vi.fn>;
+    await uiWait({ mode: "gone", locator: ".UILabel", session: "com.test@1234" }, exec);
+    const waitCalls = (exec.mock.calls as [string, string[]][]).filter((c) => c[1][0] === "wait");
+    expect(waitCalls[0][1][2]).toBe(".UILabel");
   });
 });
 

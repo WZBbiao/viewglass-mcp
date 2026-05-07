@@ -192,6 +192,8 @@ function staleSessionError(error: unknown): boolean {
     "connection closed",
     "connection reset",
     "connection refused",
+    "usb read timeout",
+    "read timeout",
     "app not found",
   ].some((needle) => text.includes(needle));
 }

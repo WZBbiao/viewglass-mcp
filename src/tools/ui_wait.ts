@@ -60,7 +60,11 @@ export async function uiWait(
     input.locator,
     session,
     exec,
-    input.mode === "appears" ? { fallback: "broad" } : undefined
+    input.mode === "appears"
+      ? { fallback: "broad" }
+      : input.mode === "gone"
+        ? { fallback: "text" }
+        : undefined
   );
   const timeoutArgs = input.timeout ? ["--timeout", String(input.timeout)] : [];
   const intervalArgs = input.intervalMs ? ["--interval-ms", String(input.intervalMs)] : [];

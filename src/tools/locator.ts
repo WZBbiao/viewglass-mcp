@@ -40,7 +40,7 @@ export interface ResolveQueryLocatorOptions {
    * current snapshot yet. This avoids prematurely turning future class names
    * like GameDetailViewController into accessibility-id queries.
    */
-  fallback?: "default" | "broad";
+  fallback?: "default" | "broad" | "text";
 }
 
 type SnapshotGroupLike = {
@@ -105,6 +105,16 @@ export function buildBroadQueryExpression(raw: string): string {
   const expressions = [`#${value}`, `contains:"${escapeContains(value)}"`];
   if (canUseBareQueryExpression(value)) expressions.push(value);
   return `(${expressions.join(" OR ")})`;
+}
+
+export function buildTextQueryExpression(raw: string): string {
+  const value = raw.trim();
+  if (!value) throw new Error("locator must be a non-empty string");
+
+  const legacy = parseLegacyLocator(value);
+  if (legacy || /^\d+$/.test(value)) return value;
+
+  return `(#${value} OR contains:"${escapeContains(value)}")`;
 }
 
 async function runQueryExpression(
@@ -235,7 +245,7 @@ export async function resolveQueryLocatorExpression(
   if (exactText.length > 0 || containsText.length > 0) {
     return { input: value, queryExpression: `contains:"${escapeContains(value)}"`, matchedBy: "visible text" };
   }
-  if (classMatches.length > 0) {
+  if (classMatches.length > 0 && options.fallback !== "text") {
     return { input: value, queryExpression: value, matchedBy: "class name" };
   }
 
@@ -244,8 +254,15 @@ export async function resolveQueryLocatorExpression(
     queryExpression:
       options.fallback === "broad"
         ? buildBroadQueryExpression(value)
+        : options.fallback === "text"
+          ? buildTextQueryExpression(value)
         : buildQueryExpressions(value)[0],
-    matchedBy: options.fallback === "broad" ? "broad fallback" : "default fallback",
+    matchedBy:
+      options.fallback === "broad"
+        ? "broad fallback"
+        : options.fallback === "text"
+          ? "text fallback"
+          : "default fallback",
   };
 }
 
