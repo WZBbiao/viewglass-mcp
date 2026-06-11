@@ -32,9 +32,16 @@ Recommended files:
   the current project.
 - `config.yaml`
   Project-local Viewglass defaults such as the target app bundle identifier.
+- `feedback.jsonl`
+  Agent-authored feedback records for blocked flows, inefficient tool loops,
+  screenshot/input/waiting bad cases, and useful improvement ideas. The
+  `ui_feedback` MCP tool appends structured JSONL here by default.
 
 Agent discipline:
 
 - Before a complex repeated task, check whether `.viewglassmcp/recipes.yaml` already has a relevant recipe.
 - After successfully completing a reusable task, update or add a recipe.
+- Before finishing a blocked or unusually inefficient Viewglass task, call
+  `ui_feedback` with the relevant session, tools, artifacts, expected behavior,
+  actual behavior, and a concise suggestion.
 - Use recipes to accelerate future runs, but still verify against a fresh `ui_snapshot`.

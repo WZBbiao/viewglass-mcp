@@ -2,12 +2,13 @@
 /**
  * Viewglass MCP Server
  *
- * Exposes 15 tools for AI agents to inspect and interact with iOS app UI at runtime:
+ * Exposes tools for AI agents to inspect and interact with iOS app UI at runtime:
  *   Read:        ui_snapshot, ui_attr_get
  *   Write:       ui_set_attr, ui_invoke
  *   Interact:    ui_tap, ui_scroll, ui_swipe, ui_long_press, ui_input, ui_dismiss
  *   Assert/Wait: ui_assert, ui_wait
  *   Visual:      ui_screenshot, compare_with_design
+ *   Feedback:    ui_feedback
  *
  * Requires the `viewglass` binary to be in PATH, or set VIEWGLASS_BIN env var.
  */
@@ -31,6 +32,7 @@ import { uiInput } from "./tools/ui_input.js";
 import { uiSwipe } from "./tools/ui_swipe.js";
 import { uiLongPress } from "./tools/ui_long_press.js";
 import { uiDismiss } from "./tools/ui_dismiss.js";
+import { uiFeedback } from "./tools/ui_feedback.js";
 import {
   logAgentTrace,
   logToolFinish,
@@ -127,6 +129,37 @@ async function withToolLogging<TArgs extends object>(
 }
 
 // ─── ui_snapshot ────────────────────────────────────────────────────────────
+
+server.registerTool(
+  "ui_feedback",
+  {
+    description:
+      "Record structured feedback about ViewglassMCP after a live task, especially bad cases, blocked flows, inefficient tool loops, " +
+      "wrong snapshots, stale sessions, missing actions, or successful reusable discoveries. " +
+      "Writes JSONL to VIEWGLASS_MCP_FEEDBACK_FILE if set, otherwise .viewglassmcp/feedback.jsonl in the current project. " +
+      "Use this near the end of a ViewglassMCP task when there is actionable product feedback.",
+    inputSchema: {
+      title: z.string().min(1).describe("Short feedback title."),
+      task: z.string().optional().describe("What the agent was trying to accomplish."),
+      summary: z.string().min(1).describe("Concise agent-perspective summary."),
+      expected: z.string().optional().describe("Expected behavior for bad cases."),
+      actual: z.string().optional().describe("Actual behavior observed."),
+      session: sessionSchema,
+      screen: z.string().optional().describe("Current page, controller, or visible state hints."),
+      tools: z.array(z.string()).optional().describe("Relevant Viewglass tool names or compact call sequence."),
+      artifacts: z.array(z.string()).optional().describe("Local screenshot/log paths related to this feedback."),
+      suggestion: z.string().optional().describe("Agent's concise recommendation, if any."),
+      severity: z.enum(["info", "warning", "error"]).optional().describe("Feedback severity."),
+      outcome: z.enum(["success", "blocked", "partial", "regression"]).optional().describe("Task outcome."),
+    },
+    annotations: { readOnlyHint: false },
+  },
+  async ({ title, task, summary, expected, actual, session, screen, tools, artifacts, suggestion, severity, outcome }) =>
+    withToolLogging("ui_feedback", { title, task, summary, expected, actual, session, screen, tools, artifacts, suggestion, severity, outcome }, async () => {
+      const result = uiFeedback({ title, task, summary, expected, actual, session, screen, tools, artifacts, suggestion, severity, outcome });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+);
 
 server.registerTool(
   "ui_snapshot",

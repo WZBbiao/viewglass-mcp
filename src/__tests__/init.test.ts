@@ -4,6 +4,9 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { autoBootstrapForMcpStartup, ensureProjectBootstrapForUsage, initProject } from "../init.js";
 
+const guidance =
+  "If using ViewglassMCP, use the installed ViewglassMCP skill before calling Viewglass tools. After any reusable live task succeeds, update .viewglassmcp/recipes.yaml in the same session. If a flow is blocked, inefficient, or exposes a tool bad case, call ui_feedback before finishing.";
+
 describe("initProject", () => {
   it("installs skill and updates AGENTS.md", () => {
     const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "viewglass-mcp-init-"));
@@ -21,7 +24,7 @@ describe("initProject", () => {
       expect(result.installed[0]?.location).toContain(path.join("skills", "viewglassmcp", "SKILL.md"));
       expect(result.agentsStatus).toBe("created");
       const agents = fs.readFileSync(path.join(project, "AGENTS.md"), "utf8");
-      expect(agents).toContain("If using ViewglassMCP, use the installed ViewglassMCP skill before calling Viewglass tools, and after any reusable live task succeeds, update .viewglassmcp/recipes.yaml in the same session.");
+      expect(agents).toContain(guidance);
       expect(fs.existsSync(path.join(project, ".viewglassmcp", "README.md"))).toBe(true);
       expect(fs.existsSync(path.join(project, ".viewglassmcp", "recipes.yaml"))).toBe(true);
       expect(fs.existsSync(path.join(project, ".viewglassmcp", "config.yaml"))).toBe(true);
@@ -40,15 +43,25 @@ describe("initProject", () => {
 describe("autoBootstrapForMcpStartup", () => {
   it("does not mutate project files on MCP startup", () => {
     const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "viewglass-mcp-auto-"));
+    const home = path.join(tempRoot, "home");
     const project = path.join(tempRoot, "project");
+    fs.mkdirSync(path.join(home, ".agents"), { recursive: true });
     fs.mkdirSync(project, { recursive: true });
     fs.writeFileSync(path.join(project, "AGENTS.md"), "# AGENTS.md\n", "utf8");
+    const originalHome = process.env.HOME;
     try {
+      process.env.HOME = home;
       autoBootstrapForMcpStartup(project);
       expect(fs.existsSync(path.join(project, ".viewglassmcp", "config.yaml"))).toBe(false);
       const agents = fs.readFileSync(path.join(project, "AGENTS.md"), "utf8");
-      expect(agents).not.toContain("If using ViewglassMCP, use the installed ViewglassMCP skill before calling Viewglass tools, and after any reusable live task succeeds, update .viewglassmcp/recipes.yaml in the same session.");
+      expect(agents).not.toContain(guidance);
+      expect(fs.existsSync(path.join(home, ".agents", "skills", "viewglassmcp", "SKILL.md"))).toBe(true);
     } finally {
+      if (originalHome === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = originalHome;
+      }
       fs.rmSync(tempRoot, { recursive: true, force: true });
     }
   });
@@ -64,7 +77,7 @@ describe("ensureProjectBootstrapForUsage", () => {
       ensureProjectBootstrapForUsage(project);
       expect(fs.existsSync(path.join(project, ".viewglassmcp", "config.yaml"))).toBe(true);
       const agents = fs.readFileSync(path.join(project, "AGENTS.md"), "utf8");
-      expect(agents).toContain("If using ViewglassMCP, use the installed ViewglassMCP skill before calling Viewglass tools, and after any reusable live task succeeds, update .viewglassmcp/recipes.yaml in the same session.");
+      expect(agents).toContain(guidance);
     } finally {
       fs.rmSync(tempRoot, { recursive: true, force: true });
     }

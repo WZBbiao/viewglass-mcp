@@ -6,7 +6,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
@@ -14,6 +14,7 @@ import { join, dirname } from "node:path";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SERVER_ENTRY = join(__dirname, "../../dist/index.js");
 const LOCAL_DEV_VIEWGLASS_BIN = join(__dirname, "../../../lookin/.build/debug/viewglass");
+const E2E_FEEDBACK_FILE = "/tmp/viewglass-mcp-e2e-feedback.jsonl";
 const VIEWGLASS_BIN =
   process.env.VIEWGLASS_BIN ??
   (existsSync(LOCAL_DEV_VIEWGLASS_BIN) ? LOCAL_DEV_VIEWGLASS_BIN : undefined);
@@ -71,7 +72,7 @@ class MCPClient {
 
   constructor() {
     this.proc = spawn("node", [SERVER_ENTRY], {
-      env: { ...process.env, VIEWGLASS_BIN },
+      env: { ...process.env, VIEWGLASS_BIN, VIEWGLASS_MCP_FEEDBACK_FILE: process.env.VIEWGLASS_MCP_FEEDBACK_FILE ?? E2E_FEEDBACK_FILE },
       stdio: ["pipe", "pipe", "inherit"],
     });
 
@@ -338,6 +339,8 @@ async function resetToHome(client: MCPClient): Promise<void> {
 const SESSION = "com.wzb.ViewglassDemo@47164";
 
 async function runE2E() {
+  const feedbackPath = process.env.VIEWGLASS_MCP_FEEDBACK_FILE ?? E2E_FEEDBACK_FILE;
+  rmSync(feedbackPath, { force: true });
   const client = new MCPClient();
   // Give server a moment to boot
   await new Promise((r) => setTimeout(r, 500));
@@ -377,6 +380,24 @@ async function runE2E() {
       if (!data.nodes.some((node) => node.actionTargetOid !== undefined)) {
         throw new Error("expected actionTargetOid on nodes");
       }
+    });
+
+    // ─── ui_feedback ───────────────────────────────────────────────────────
+    console.log("\n[ ui_feedback ]");
+
+    await test("feedback writes structured JSONL", async () => {
+      const data = await client.callToolJSON<{ ok?: boolean; path?: string; id?: string }>("ui_feedback", {
+        title: "E2E feedback smoke",
+        task: "Verify ui_feedback tool",
+        summary: "MCP e2e recorded a synthetic feedback item.",
+        outcome: "success",
+        severity: "info",
+        session: SESSION,
+        tools: ["ui_feedback"],
+      });
+      if (!data.ok) throw new Error("expected ok:true");
+      if (!data.id) throw new Error("missing feedback id");
+      if (data.path !== feedbackPath) throw new Error(`unexpected feedback path: ${data.path}`);
     });
 
     // ─── ui_attr_get ────────────────────────────────────────────────────────

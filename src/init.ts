@@ -10,9 +10,11 @@ const CLIENT_DEFINITIONS = [
 
 const AGENTS_FILE_NAME = "AGENTS.md";
 const AGENTS_GUIDANCE_LINE =
-  "- If using ViewglassMCP, use the installed ViewglassMCP skill before calling Viewglass tools, and after any reusable live task succeeds, update .viewglassmcp/recipes.yaml in the same session.";
+  "- If using ViewglassMCP, use the installed ViewglassMCP skill before calling Viewglass tools. After any reusable live task succeeds, update .viewglassmcp/recipes.yaml in the same session. If a flow is blocked, inefficient, or exposes a tool bad case, call ui_feedback before finishing.";
 const AGENTS_LEGACY_LINE =
   "- If using ViewglassMCP, first find and read the installed ViewglassMCP skill before calling Viewglass tools, and after any reusable live task succeeds, update .viewglassmcp/recipes.yaml in the same session.";
+const AGENTS_LEGACY_LINE_V2 =
+  "- If using ViewglassMCP, use the installed ViewglassMCP skill before calling Viewglass tools, and after any reusable live task succeeds, update .viewglassmcp/recipes.yaml in the same session.";
 
 type SkillType = "mcp" | "cli";
 
@@ -130,8 +132,12 @@ function ensureAgentsGuidance(projectRoot: string, force = false): "created" | "
   if (current.includes(AGENTS_GUIDANCE_LINE)) {
     return "no_change";
   }
-  if (current.includes(AGENTS_LEGACY_LINE)) {
-    fs.writeFileSync(agentsPath, current.replace(AGENTS_LEGACY_LINE, AGENTS_GUIDANCE_LINE), "utf8");
+  if (current.includes(AGENTS_LEGACY_LINE) || current.includes(AGENTS_LEGACY_LINE_V2)) {
+    fs.writeFileSync(
+      agentsPath,
+      current.replace(AGENTS_LEGACY_LINE, AGENTS_GUIDANCE_LINE).replace(AGENTS_LEGACY_LINE_V2, AGENTS_GUIDANCE_LINE),
+      "utf8"
+    );
     return "updated";
   }
   if (!force) {
@@ -192,9 +198,9 @@ export function autoBootstrapForMcpStartup(startCwd: string = process.cwd()): vo
     const targets = detectClients();
     for (const target of targets) {
       try {
-        installSkill(target.skillsDir, target.name, 'mcp', false);
+        installSkill(target.skillsDir, target.name, "mcp", true);
       } catch {
-        // already installed or not writable; keep startup non-fatal
+        // not writable or partially configured; keep startup non-fatal
       }
     }
   } catch {
