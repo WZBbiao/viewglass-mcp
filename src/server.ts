@@ -601,7 +601,9 @@ server.registerTool(
       "(Info.plist, .xcodeproj, or Package.swift) and call this directly. " +
       "Partial bundle ID is supported (e.g. 'ExampleApp' matches 'com.example.app'). " +
       "Returns a session string (bundleId@port) — pass it to all other Viewglass tools. " +
-      "After a successful connection, ViewglassMCP persists the resolved bundle id into .viewglassmcp/config.yaml for future runs. " +
+      "When simulator and physical-device sessions both match the same bundle ID, ViewglassMCP prefers the physical device by default. " +
+      "Pass deviceType or set sessionDefaults.deviceType in .viewglassmcp/config.yaml to force a specific target class. " +
+      "After a successful connection, ViewglassMCP persists the resolved bundle id and device type into .viewglassmcp/config.yaml for future runs. " +
       "Once config.yaml has a bundleId, other Viewglass tools should usually omit session and let MCP resolve it automatically. " +
       "If the app is not found: ask the user to build and run it in Xcode (Debug scheme) and try again.",
     inputSchema: {
@@ -610,13 +612,19 @@ server.registerTool(
         .describe(
           "Bundle ID or partial name of the target app (e.g. 'com.myapp.Foo' or 'Foo')."
         ),
+      deviceType: z
+        .enum(["device", "simulator"])
+        .optional()
+        .describe(
+          "Optional strict target type. Use 'device' to avoid accidentally connecting to a simulator for the same bundle ID."
+        ),
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ bundleId }) =>
-    withToolLogging("ui_connect", { bundleId }, async () => {
+  async ({ bundleId, deviceType }) =>
+    withToolLogging("ui_connect", { bundleId, deviceType }, async () => {
       try {
-        const result = await uiConnect({ bundleId });
+        const result = await uiConnect({ bundleId, deviceType });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (e) {
         return { isError: true, content: [{ type: "text", text: String(e) }] };
