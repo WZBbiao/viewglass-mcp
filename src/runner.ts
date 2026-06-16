@@ -49,6 +49,22 @@ export interface RunResult {
   stderr: string;
 }
 
+export class ViewglassCLIError extends Error {
+  readonly code?: number | string;
+  readonly stdout?: string;
+  readonly stderr?: string;
+  readonly args: string[];
+
+  constructor(args: string[], error: { code?: number | string; stdout?: string; stderr?: string; message?: string }) {
+    super(formatCLIErrorMessage(args, error));
+    this.name = "ViewglassCLIError";
+    this.code = error.code;
+    this.stdout = error.stdout;
+    this.stderr = error.stderr;
+    this.args = args;
+  }
+}
+
 /** Testable exec function type — matches promisified execFile signature. */
 export type ExecFn = (
   file: string,
@@ -113,8 +129,32 @@ async function runCLIOnce(
       stdout: anyError.stdout,
       stderr: anyError.stderr ?? String(error),
     });
-    throw error;
+    throw new ViewglassCLIError(fullArgs, {
+      code: anyError.code,
+      stdout: anyError.stdout,
+      stderr: anyError.stderr,
+      message: error instanceof Error ? error.message : String(error),
+    });
   }
+}
+
+function formatCLIErrorMessage(
+  args: string[],
+  error: { code?: number | string; stdout?: string; stderr?: string; message?: string }
+): string {
+  const parts = [
+    `Viewglass CLI failed: ${["viewglass", ...args].join(" ")}`,
+    error.code !== undefined ? `exitCode: ${error.code}` : undefined,
+    error.stderr ? `stderr: ${truncate(error.stderr.trim(), 4000)}` : undefined,
+    error.stdout ? `stdout: ${truncate(error.stdout.trim(), 4000)}` : undefined,
+    error.message ? `message: ${truncate(error.message.trim(), 1000)}` : undefined,
+  ].filter(Boolean);
+  return parts.join("\n");
+}
+
+function truncate(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength)}… <truncated ${value.length - maxLength} chars>`;
 }
 
 /**

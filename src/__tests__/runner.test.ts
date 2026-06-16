@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, it, expect, vi } from "vitest";
-import { detectSession, resolveSession, parseJSON, runCLI } from "../runner.js";
+import { detectSession, resolveSession, parseJSON, runCLI, ViewglassCLIError } from "../runner.js";
 import type { ExecFn, RunResult } from "../runner.js";
 
 function makeExec(result: Partial<RunResult> | Error): ExecFn {
@@ -186,7 +186,31 @@ describe("runCLI", () => {
     const exec = vi.fn().mockRejectedValue(error) as unknown as ReturnType<typeof vi.fn> & ExecFn;
 
     await expect(runCLI(["invoke", "1", "missing"], { session: "com.test.App@47164", exec }))
-      .rejects.toThrow("Unknown selector");
+      .rejects.toThrow("selector not found");
     expect(exec).toHaveBeenCalledTimes(1);
+  });
+
+  it("includes CLI stdout and stderr in thrown errors", async () => {
+    const error = Object.assign(new Error("Command failed"), {
+      stdout: JSON.stringify({ error: true, message: "tap target is not hittable" }),
+      stderr: "LookinCoreError.actionFailed(tap)",
+      code: 42,
+    });
+    const exec = vi.fn().mockRejectedValue(error) as unknown as ReturnType<typeof vi.fn> & ExecFn;
+
+    await expect(runCLI(["tap", "824", "--json"], { session: "com.test.App@47164", exec }))
+      .rejects.toThrow("tap target is not hittable");
+
+    try {
+      await runCLI(["tap", "824", "--json"], { session: "com.test.App@47164", exec });
+      throw new Error("expected runCLI to throw");
+    } catch (thrown) {
+      expect(thrown).toBeInstanceOf(ViewglassCLIError);
+      const err = thrown as ViewglassCLIError;
+      expect(err.code).toBe(42);
+      expect(err.stdout).toContain("tap target is not hittable");
+      expect(err.stderr).toContain("LookinCoreError.actionFailed");
+      expect(err.message).toContain("viewglass tap 824 --json --session com.test.App@47164");
+    }
   });
 });
