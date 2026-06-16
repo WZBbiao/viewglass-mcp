@@ -1,6 +1,7 @@
 import { runCLI, resolveSession } from "../runner.js";
 import type { ExecFn } from "../runner.js";
 import { resolveUniqueNodeLocator } from "./locator.js";
+import { MUTATION_TIMEOUT_MS } from "./timeouts.js";
 
 export interface UILongPressInput {
   /**
@@ -31,6 +32,6 @@ export async function uiLongPress(
 ): Promise<UILongPressResult> {
   const session = await resolveSession(input.session, exec);
   const resolved = await resolveUniqueNodeLocator(input.target, session, exec);
-  await runCLI(["long-press", resolved.resolvedTarget, "--json"], { session, exec });
+  await runCLI(["long-press", resolved.resolvedTarget, "--json"], { session, exec, timeoutMs: MUTATION_TIMEOUT_MS });
   return { target: input.target, ok: true };
 }

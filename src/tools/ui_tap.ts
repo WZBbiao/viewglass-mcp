@@ -1,5 +1,6 @@
 import { parseJSON, runCLI, resolveSession } from "../runner.js";
 import type { ExecFn } from "../runner.js";
+import { MUTATION_TIMEOUT_MS } from "./timeouts.js";
 
 export interface UITapInput {
   /**
@@ -41,7 +42,7 @@ export async function uiTap(
     throw new Error("ui_tap requires an exact oid from ui_snapshot. First inspect ui_snapshot.groups/nodes, then pass that oid to ui_tap.");
   }
   const session = await resolveSession(input.session, exec);
-  const result = await runCLI(["tap", input.oid, "--json"], { session, exec });
+  const result = await runCLI(["tap", input.oid, "--json"], { session, exec, timeoutMs: MUTATION_TIMEOUT_MS });
   const action = parseJSON<{
     strategyUsed?: string;
     action?: string;

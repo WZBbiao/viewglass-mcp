@@ -39,6 +39,13 @@ describe("uiSwipe", () => {
     expect(args[args.indexOf("--direction") + 1]).toBe("up");
   });
 
+  it("uses a 30s process timeout for swipe mutations", async () => {
+    const exec = makeExec() as ReturnType<typeof vi.fn>;
+    await uiSwipe({ target: "UIScrollView", direction: "up", session: "com.test@1234" }, exec);
+    const swipeCall = exec.mock.calls.find((c) => c[1][0] === "swipe");
+    expect(swipeCall?.[2]).toEqual({ timeout: 30_000 });
+  });
+
   it("defaults distance to 200", async () => {
     const exec = makeExec() as ReturnType<typeof vi.fn>;
     await uiSwipe({ target: "UIScrollView", direction: "down", session: "com.test@1234" }, exec);

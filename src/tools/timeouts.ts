@@ -1,0 +1,1 @@
+export const MUTATION_TIMEOUT_MS = 30_000;

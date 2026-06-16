@@ -1,5 +1,6 @@
 import { parseJSON, runCLI, resolveSession } from "../runner.js";
 import type { ExecFn } from "../runner.js";
+import { MUTATION_TIMEOUT_MS } from "./timeouts.js";
 
 export type ScrollDirection = "up" | "down" | "left" | "right";
 
@@ -112,7 +113,7 @@ export async function uiScroll(
   ];
   if (input.animated !== false) args.push("--animated");
 
-  const { stdout } = await runCLI(args, { session, exec });
+  const { stdout } = await runCLI(args, { session, exec, timeoutMs: MUTATION_TIMEOUT_MS });
   const action = parseJSON<{ targetClass?: string }>(stdout, "ui_scroll/swipe");
   const result: {
     ok: true;

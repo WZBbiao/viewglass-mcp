@@ -20,6 +20,13 @@ describe("uiLongPress", () => {
     expect(lpCalls[0][1]).toContain("#item");
   });
 
+  it("uses a 30s process timeout for long-press mutations", async () => {
+    const exec = makeExec() as ReturnType<typeof vi.fn>;
+    await uiLongPress({ target: "#item", session: "com.test@1234" }, exec);
+    const lpCall = exec.mock.calls.find((c) => c[1][0] === "long-press");
+    expect(lpCall?.[2]).toEqual({ timeout: 30_000 });
+  });
+
   it("passes --json flag", async () => {
     const exec = makeExec() as ReturnType<typeof vi.fn>;
     await uiLongPress({ target: "#item", session: "com.test@1234" }, exec);

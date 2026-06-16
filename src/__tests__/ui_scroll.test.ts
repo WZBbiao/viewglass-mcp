@@ -21,6 +21,13 @@ describe("uiScroll", () => {
     ]);
   });
 
+  it("uses a 30s process timeout for scroll swipe mutations", async () => {
+    const exec = makeExec() as ReturnType<typeof vi.fn>;
+    await uiScroll({ oid: "88", direction: "down", session: "com.test@1234" }, exec);
+    const swipeCall = exec.mock.calls.find((c) => c[1][0] === "swipe");
+    expect(swipeCall?.[2]).toEqual({ timeout: 30_000 });
+  });
+
   it("passes custom direction and distance", async () => {
     const exec = makeExec() as ReturnType<typeof vi.fn>;
     await uiScroll({ oid: "88", direction: "up", distance: 500, session: "com.test@1234" }, exec);

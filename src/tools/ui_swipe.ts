@@ -1,6 +1,7 @@
 import { runCLI, resolveSession } from "../runner.js";
 import type { ExecFn } from "../runner.js";
 import { resolveUniqueNodeLocator } from "./locator.js";
+import { MUTATION_TIMEOUT_MS } from "./timeouts.js";
 
 export type SwipeDirection = "up" | "down" | "left" | "right";
 
@@ -52,7 +53,7 @@ export async function uiSwipe(
   ];
   if (input.animated) cliArgs.push("--animated");
 
-  await runCLI(cliArgs, { session, exec });
+  await runCLI(cliArgs, { session, exec, timeoutMs: MUTATION_TIMEOUT_MS });
   return {
     target: input.target,
     direction: input.direction,

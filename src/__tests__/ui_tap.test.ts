@@ -18,6 +18,13 @@ describe("uiTap", () => {
     expect(tapCall?.[1]).toEqual(["tap", "42", "--json", "--session", "com.test@1234"]);
   });
 
+  it("uses a 30s process timeout for tap mutations", async () => {
+    const exec = makeExec() as ReturnType<typeof vi.fn>;
+    await uiTap({ oid: "42", session: "com.test@1234" }, exec);
+    const tapCall = exec.mock.calls.find((c) => c[1][0] === "tap");
+    expect(tapCall?.[2]).toEqual({ timeout: 30_000 });
+  });
+
   it("returns execution summary and diagnostics", async () => {
     const exec = makeExec();
     const result = await uiTap({ oid: "42", session: "com.test@1234" }, exec);
