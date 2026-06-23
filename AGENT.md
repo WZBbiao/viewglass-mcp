@@ -25,16 +25,17 @@ Use these tools in this order unless the task is trivial and the target is alrea
 
 1. `ui_snapshot`
    - Always start here for navigation, tab switching, settings pages, custom UI, and any unknown screen.
-   - Default output is a compact action index. Use `summary`, `groups`, `navigationCandidates`, and `nodes` to identify exact operation targets.
-   - Use `ui_screenshot` for visual layout and `ui_attr_get` for long text or full runtime attributes after the target `oid` is known.
+   - Default output is a compact action index. Use `recommendedLocator`, `summary`, `groups`, `navigationCandidates`, and `nodes` to identify operation targets.
+   - Use `ui_screenshot` for visual layout and `ui_attr_get` for long text or full runtime attributes after the stable locator is known.
    - Use `mode=fullIndex` only when the compact action index is insufficient.
-2. Resolve an exact target `oid` from `ui_snapshot`
-   - Prefer `groups.items[].oid` and `nodes[].oid` / `actionTargetOid`.
-   - Prefer user-visible labels over UIKit private class names.
+2. Choose a stable locator
+   - Prefer `#accessibilityIdentifier` and `recommendedLocator`.
+   - If source is available and a key target lacks a stable locator, add an `accessibilityIdentifier` before relying on text/class/OID.
+   - `oid` / `lastKnownOid` are volatile runtime handles. Use them only as cache hints or one-off fallback.
    - Do not guess `UITabBar`, `UITabBarButton`, `UIButton`, or private wrapper classes unless the snapshot already proves they are the right target.
-3. Execute using exact `oid`
-   - `ui_tap`, `ui_scroll`, `ui_input`, and `ui_dismiss` require the exact `oid` you resolved from `ui_snapshot`.
-   - For page/list scrolling, `ui_scroll` may be given a visible wrapper/cell oid; it resolves to the real scroll view and performs a swipe-style scroll.
+3. Execute using locator first
+   - `ui_tap`, `ui_scroll`, `ui_input`, `ui_attr_get`, and `ui_dismiss` accept `locator` first and `oid` as fallback.
+   - For page/list scrolling, `ui_scroll` may be given a visible wrapper/cell locator; it resolves to the real scroll view and performs a swipe-style scroll.
 4. `ui_wait` or another `ui_snapshot`
    - Use this to confirm navigation, modal transitions, and list updates.
 5. `ui_attr_get`
@@ -46,7 +47,7 @@ Avoid these anti-patterns:
 - taking screenshots before using the structured snapshot, unless the task is visual or layout-heavy
 - inventing alternate locator DSL such as `@"..."` or private query syntax
 - guessing UIKit internal class names before reading the snapshot
-- passing guessed labels to execution tools instead of first resolving an exact `oid`
+- replaying a recipe by `oid` before trying stable locator signals
 
 Do not repeatedly request large snapshots. The default `ui_snapshot` is intentionally small; use screenshots for visual context and targeted attribute reads for long content.
 
@@ -70,7 +71,7 @@ Rules:
 3. Persist the project bundle id in `.viewglassmcp/config.yaml` once it is known.
 4. Read `.viewglassmcp/recipes.yaml` before repeating a known flow.
 5. After a reusable UI task succeeds on a live app, you must update or add a recipe in `.viewglassmcp/recipes.yaml` during the same session before finishing the task.
-6. Do not store runtime `oid` as the durable identity of a target.
+6. Do not store runtime `oid` as the only durable identity of a target; keep it only as `lastKnownOid` cache metadata.
 7. Prefer multi-signal recipes:
    - `controllerHints`
    - `groupRole`

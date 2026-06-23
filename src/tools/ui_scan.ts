@@ -1,5 +1,5 @@
 import { VIEWGLASS_BIN, parseJSON } from "../runner.js";
-import { saveProjectBundleId } from "../project_config.js";
+import { saveProjectSessionDefaults } from "../project_config.js";
 import type { ExecFn } from "../runner.js";
 import { defaultExec } from "../runner.js";
 
@@ -163,14 +163,22 @@ export async function uiScan(
   }
 
   if (sessions.length === 1) {
-    saveProjectBundleId(sessions[0].bundleId, projectCwd, sessions[0].deviceType);
+    saveProjectSessionDefaults({
+      bundleId: sessions[0].bundleId,
+      session: sessions[0].session,
+      port: sessions[0].port,
+      deviceType: sessions[0].deviceType,
+      deviceName: sessions[0].deviceName,
+      deviceIdentifier: sessions[0].deviceIdentifier,
+    }, projectCwd);
   }
 
   return {
     sessions,
     message:
       `Found ${sessions.length} session(s): ${sessions.map((s) => s.session).join(", ")}. ` +
-      "Verify that the bundleId matches the iOS app you intend to inspect. " +
+      "Verify that the bundleId and device metadata match the iOS app you intend to inspect. " +
+      "If multiple sessions share a bundleId, pass session, port, deviceIdentifier, deviceName, or deviceType to ui_connect. " +
       "If none of the sessions match, ask the user to build and run the correct app " +
       "in Xcode (Debug scheme), then call ui_scan again.",
   };

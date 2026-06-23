@@ -1,16 +1,22 @@
 import { parseJSON, runCLI, resolveSession } from "../runner.js";
 import type { ExecFn } from "../runner.js";
+import { resolveActionLocator } from "./locator.js";
 
 export interface UIDismissInput {
-  /** Executable node oid from ui_snapshot. The target can be a UIViewController node or any view hosted by one. */
-  oid: string;
+  /** Stable locator such as an accessibilityIdentifier. Preferred for replay. */
+  locator?: string;
+  /** Runtime OID from ui_snapshot. The target can be a UIViewController node or any view hosted by one. */
+  oid?: string;
   /** Viewglass session in bundleId@port format. Auto-detected if omitted. */
   session?: string;
 }
 
 export interface UIDismissResult {
   oid: string;
+  locator?: string;
   resolvedOid?: string;
+  matchedBy?: string;
+  candidateCount?: number;
   ok: true;
 }
 
@@ -47,17 +53,26 @@ export async function uiDismiss(
   input: UIDismissInput,
   exec?: ExecFn
 ): Promise<UIDismissResult> {
-  if (!input.oid || String(input.oid).trim() === "") {
-    throw new Error("ui_dismiss requires an exact oid from ui_snapshot. First inspect ui_snapshot.groups/nodes, then pass that oid to ui_dismiss.");
+  if (!input.locator && !input.oid) {
+    throw new Error("ui_dismiss requires either 'locator' or 'oid'. Prefer locator for reusable flows.");
   }
   const session = await resolveSession(input.session, exec);
-  const resolvedOid = await resolveDismissTargetOid(input.oid, session, exec);
+  const locatorResolved = input.locator
+    ? await resolveActionLocator(input.locator, session, "dismiss", exec)
+    : undefined;
+  const target = locatorResolved?.resolvedTarget ?? input.oid!;
+  const resolvedOid = await resolveDismissTargetOid(target, session, exec);
   await runCLI(["dismiss", resolvedOid, "--json"], { session, exec });
   const result: UIDismissResult = {
-    oid: input.oid,
+    oid: target,
     ok: true,
   };
-  if (resolvedOid !== input.oid) result.resolvedOid = resolvedOid;
+  if (input.locator) result.locator = input.locator;
+  if (locatorResolved) {
+    result.matchedBy = locatorResolved.matchedBy;
+    result.candidateCount = locatorResolved.candidateCount;
+  }
+  if (resolvedOid !== target) result.resolvedOid = resolvedOid;
   return result;
 }
 

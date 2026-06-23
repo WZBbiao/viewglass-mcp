@@ -74,6 +74,9 @@ describe("uiSwipe", () => {
     const exec = makeExec();
     const result = await uiSwipe({ target: "#pager", direction: "left", session: "com.test@1234" }, exec);
     expect(result.target).toBe("#pager");
+    expect(result.resolvedOid).toBe("66");
+    expect(result.matchedBy).toBe("query fallback");
+    expect(result.candidateCount).toBe(1);
     expect(result.direction).toBe("left");
     expect(result.distance).toBe(200);
     expect(result.ok).toBe(true);

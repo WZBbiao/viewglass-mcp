@@ -5,9 +5,15 @@ export interface ViewglassProjectConfig {
   schemaVersion: number;
   sessionDefaults?: {
     bundleId?: string;
+    session?: string;
+    port?: number;
     deviceType?: "device" | "simulator";
+    deviceName?: string;
+    deviceIdentifier?: string;
   };
 }
+
+export type SessionDefaultsUpdate = NonNullable<ViewglassProjectConfig["sessionDefaults"]>;
 
 function hasProjectMarkers(dir: string): boolean {
   const names = ["AGENTS.md", "Package.swift", "Podfile", ".git", ".viewglassmcp"];
@@ -74,12 +80,31 @@ function parseProjectConfig(raw: string): ViewglassProjectConfig {
         const value = nested.slice("bundleId:".length).trim().replace(/^['\"]|['\"]$/g, "");
         config.sessionDefaults ??= {};
         if (value) config.sessionDefaults.bundleId = value;
+      } else if (nested.startsWith("session:")) {
+        const value = nested.slice("session:".length).trim().replace(/^['\"]|['\"]$/g, "");
+        config.sessionDefaults ??= {};
+        if (value) config.sessionDefaults.session = value;
+      } else if (nested.startsWith("port:")) {
+        const value = nested.slice("port:".length).trim().replace(/^['\"]|['\"]$/g, "");
+        const parsed = Number(value);
+        if (Number.isInteger(parsed)) {
+          config.sessionDefaults ??= {};
+          config.sessionDefaults.port = parsed;
+        }
       } else if (nested.startsWith("deviceType:")) {
         const value = nested.slice("deviceType:".length).trim().replace(/^['\"]|['\"]$/g, "");
         if (value === "device" || value === "simulator") {
           config.sessionDefaults ??= {};
           config.sessionDefaults.deviceType = value;
         }
+      } else if (nested.startsWith("deviceName:")) {
+        const value = nested.slice("deviceName:".length).trim().replace(/^['\"]|['\"]$/g, "");
+        config.sessionDefaults ??= {};
+        if (value) config.sessionDefaults.deviceName = value;
+      } else if (nested.startsWith("deviceIdentifier:")) {
+        const value = nested.slice("deviceIdentifier:".length).trim().replace(/^['\"]|['\"]$/g, "");
+        config.sessionDefaults ??= {};
+        if (value) config.sessionDefaults.deviceIdentifier = value;
       }
     }
   }
@@ -98,8 +123,18 @@ export function saveProjectBundleId(
   startCwd: string = process.cwd(),
   deviceType?: "device" | "simulator"
 ): string | undefined {
-  const normalized = bundleId.trim();
-  if (!normalized) return undefined;
+  return saveProjectSessionDefaults({
+    bundleId,
+    ...(deviceType ? { deviceType } : {}),
+  }, startCwd);
+}
+
+export function saveProjectSessionDefaults(
+  defaults: SessionDefaultsUpdate,
+  startCwd: string = process.cwd()
+): string | undefined {
+  const normalizedBundleId = defaults.bundleId?.trim();
+  if (!normalizedBundleId) return undefined;
 
   const projectRoot = findProjectRoot(startCwd);
   if (!projectRoot) return undefined;
@@ -116,8 +151,12 @@ export function saveProjectBundleId(
     schemaVersion: current.schemaVersion || 1,
     sessionDefaults: {
       ...(current.sessionDefaults ?? {}),
-      bundleId: normalized,
-      ...(deviceType ? { deviceType } : {}),
+      bundleId: normalizedBundleId,
+      ...(defaults.session?.trim() ? { session: defaults.session.trim() } : {}),
+      ...(defaults.port !== undefined ? { port: defaults.port } : {}),
+      ...(defaults.deviceType ? { deviceType: defaults.deviceType } : {}),
+      ...(defaults.deviceName?.trim() ? { deviceName: defaults.deviceName.trim() } : {}),
+      ...(defaults.deviceIdentifier?.trim() ? { deviceIdentifier: defaults.deviceIdentifier.trim() } : {}),
     },
   };
 
@@ -125,7 +164,11 @@ export function saveProjectBundleId(
     `schemaVersion: ${next.schemaVersion}`,
     "sessionDefaults:",
     `  bundleId: \"${next.sessionDefaults?.bundleId ?? ""}\"`,
+    ...(next.sessionDefaults?.session ? [`  session: \"${next.sessionDefaults.session}\"`] : []),
+    ...(next.sessionDefaults?.port !== undefined ? [`  port: ${next.sessionDefaults.port}`] : []),
     ...(next.sessionDefaults?.deviceType ? [`  deviceType: \"${next.sessionDefaults.deviceType}\"`] : []),
+    ...(next.sessionDefaults?.deviceName ? [`  deviceName: \"${next.sessionDefaults.deviceName}\"`] : []),
+    ...(next.sessionDefaults?.deviceIdentifier ? [`  deviceIdentifier: \"${next.sessionDefaults.deviceIdentifier}\"`] : []),
     "",
   ];
   fs.writeFileSync(configPath, lines.join("\n"), "utf8");

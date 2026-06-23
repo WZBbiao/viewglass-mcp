@@ -5,4 +5,8 @@ version: 1
 # Agents should add project-specific recipes only after a live task succeeds and
 # the flow is likely to repeat. Do not prefill this file with recipes from a
 # different app or project.
+#
+# Prefer stable locator signals such as accessibilityIdAny / recommendedLocator.
+# Store lastKnownOid only as volatile cache metadata; replay should try stable
+# locators before oid.
 recipes: []

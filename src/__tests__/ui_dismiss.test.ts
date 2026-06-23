@@ -3,7 +3,31 @@ import { uiDismiss } from "../tools/ui_dismiss.js";
 import type { ExecFn } from "../runner.js";
 
 function makeExec(): ExecFn {
+  let hierarchyCount = 0;
   return vi.fn().mockImplementation(async (_bin: string, args: string[]) => {
+    if (args[0] === "query") {
+      if (args[1] === "#dismiss_modal") {
+        return { stdout: JSON.stringify([{ oid: 91, primaryOid: 91 }]), stderr: "" };
+      }
+      return { stdout: "[]", stderr: "" };
+    }
+    if (args[0] === "hierarchy") {
+      hierarchyCount += 1;
+      if (hierarchyCount === 1) {
+        return {
+          stdout: JSON.stringify({
+            appInfo: { appName: "FixtureApp", bundleIdentifier: "com.test", serverVersion: "0.1.0" },
+            fetchedAt: "2026-04-15T10:00:00Z",
+            screenScale: 3,
+            screenSize: { x: 0, y: 0, width: 390, height: 844 },
+            snapshotId: "snap-dismiss",
+            windows: [],
+          }),
+          stderr: "",
+        };
+      }
+      return { stdout: JSON.stringify({ windows: [] }), stderr: "" };
+    }
     return { stdout: "{}", stderr: "" };
   });
 }
@@ -14,6 +38,19 @@ describe("uiDismiss", () => {
     await uiDismiss({ oid: "91", session: "com.test@1234" }, exec);
     const dismissCall = (exec.mock.calls as [string, string[]][]).find((c) => c[1][0] === "dismiss")!;
     expect(dismissCall[1]).toEqual(["dismiss", "91", "--json", "--session", "com.test@1234"]);
+  });
+
+  it("resolves locator before dismiss", async () => {
+    const exec = makeExec() as ReturnType<typeof vi.fn>;
+    const result = await uiDismiss({ locator: "dismiss_modal", session: "com.test@1234" }, exec);
+    const dismissCall = (exec.mock.calls as [string, string[]][]).find((c) => c[1][0] === "dismiss")!;
+    expect(dismissCall[1]).toEqual(["dismiss", "91", "--json", "--session", "com.test@1234"]);
+    expect(result).toEqual(expect.objectContaining({
+      oid: "91",
+      locator: "dismiss_modal",
+      matchedBy: "query fallback",
+      candidateCount: 1,
+    }));
   });
 
   it("resolves hierarchy once without automatic post-dismiss refresh", async () => {
@@ -61,10 +98,10 @@ describe("uiDismiss", () => {
     expect(result).toEqual({ oid: "11", resolvedOid: "99", ok: true });
   });
 
-  it("rejects missing oid", async () => {
+  it("rejects missing target", async () => {
     const exec = makeExec();
-    await expect(uiDismiss({ oid: "" as string, session: "com.test@1234" }, exec)).rejects.toThrow(
-      "ui_dismiss requires an exact oid from ui_snapshot"
+    await expect(uiDismiss({ session: "com.test@1234" }, exec)).rejects.toThrow(
+      "ui_dismiss requires either 'locator' or 'oid'"
     );
   });
 });

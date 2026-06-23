@@ -172,7 +172,7 @@ server.registerTool(
       "and matched project-local recipes when available, so agents can " +
       "find targets without guessing UIKit class names. " +
       "Best practice: for any navigation or custom UI task, call ui_snapshot first to understand the current page, " +
-      "then use ui_tap with an exact oid from the snapshot. " +
+      "then use recommendedLocator or #accessibilityIdentifier with action tools; keep oid only as a volatile last-known fallback. " +
       "If the target is a settings/profile-style icon without text, inspect summary.navigationCandidates by areaHint such as topRight. " +
       "Use ui_screenshot for visual layout and ui_attr_get for long text or detailed attributes. " +
       "Use mode=fullIndex only when the small action index is insufficient. Set compact=false only when you also need rawTree.",
@@ -223,12 +223,13 @@ server.registerTool(
   "ui_attr_get",
   {
     description:
-      "Get one or more runtime attributes of a UI node by OID. " +
-      "Returns a map of { attrKey: value }. Use ui_snapshot to get the OID first. " +
+      "Get one or more runtime attributes of a UI node. Prefer locator for replay; oid is only a last-known runtime handle. " +
+      "Returns a map of { attrKey: value }. " +
       "Common keys: frame, backgroundColor, alpha, hidden, text, font, " +
       "contentMode, accessibilityIdentifier, accessibilityLabel, cornerRadius.",
     inputSchema: {
-      oid: z.coerce.string().describe("Node OID from ui_snapshot (number or string)."),
+      locator: z.string().optional().describe("Stable locator such as #accessibilityIdentifier, visible text, class name, or query expression. Preferred."),
+      oid: z.coerce.string().optional().describe("Runtime OID from ui_snapshot. Volatile; use only as last-known handle or cache hint."),
       attrs: z
         .array(z.string())
         .min(1)
@@ -238,10 +239,13 @@ server.registerTool(
     },
     annotations: { readOnlyHint: true, idempotentHint: true },
   },
-  async ({ oid, attrs, session }) =>
-    withToolLogging("ui_attr_get", { oid, attrs, session }, async () => {
+  async ({ locator, oid, attrs, session }) =>
+    withToolLogging("ui_attr_get", { locator, oid, attrs, session }, async () => {
       try {
-        const result = await uiAttrGet({ oid, attrs, session });
+        if (!locator && !oid) {
+          return { isError: true, content: [{ type: "text", text: "ui_attr_get requires either 'locator' or 'oid'" }] };
+        }
+        const result = await uiAttrGet({ locator, oid, attrs, session });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (e) {
         return { isError: true, content: [{ type: "text", text: String(e) }] };
@@ -255,24 +259,32 @@ server.registerTool(
   "ui_tap",
   {
     description:
-      "Tap a UI element by oid only. " +
-      "First call ui_snapshot, inspect groups/nodes, then pass the exact oid here. " +
+      "Tap a UI element. Prefer locator such as #accessibilityIdentifier or ui_snapshot.recommendedLocator for replay. " +
+      "oid is supported only as a volatile last-known runtime handle. " +
       "Supports semantic taps on UIControl, UITapGestureRecognizer-backed views, " +
       "UITableViewCell, and UICollectionViewCell, including nested labels inside a cell. " +
       "If semantic tap cannot find an actionable target, falls back to coordinate semantic hit-testing. " +
       "Returns { ok, oid, strategyUsed, detail, targetClass } so agents can verify which action actually fired.",
     inputSchema: {
+      locator: z
+        .string()
+        .optional()
+        .describe("Stable locator such as #accessibilityIdentifier, visible text, class name, or query expression. Preferred."),
       oid: z
         .coerce
         .string()
-        .describe("Executable node oid from ui_snapshot."),
+        .optional()
+        .describe("Runtime OID from ui_snapshot. Volatile; use only as last-known handle or cache hint."),
       session: sessionSchema,
     },
   },
-  async ({ oid, session }) =>
-    withToolLogging("ui_tap", { oid, session }, async () => {
+  async ({ locator, oid, session }) =>
+    withToolLogging("ui_tap", { locator, oid, session }, async () => {
       try {
-        const result = await uiTap({ oid, session });
+        if (!locator && !oid) {
+          return { isError: true, content: [{ type: "text", text: "ui_tap requires either 'locator' or 'oid'" }] };
+        }
+        const result = await uiTap({ locator, oid, session });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (e) {
         return { isError: true, content: [{ type: "text", text: String(e) }] };
@@ -286,24 +298,27 @@ server.registerTool(
   "ui_scroll",
   {
     description:
-      "Scroll by oid using a human-like swipe on a resolved scroll container. " +
-      "First call ui_snapshot, inspect groups/nodes, then pass the exact oid here. " +
+      "Scroll using a human-like swipe on a resolved scroll container. Prefer locator for replay; oid is only a volatile last-known runtime handle. " +
       "If the oid points to a wrapper/cell, ui_scroll resolves to an inner or ancestor scroll view that exposes contentOffset before swiping. " +
       "Returns an execution summary only. " +
       "Use direction 'down' to reveal content below the fold, 'up' to scroll back. " +
       "distance defaults to 300 pts if omitted.",
     inputSchema: {
-      oid: z.coerce.string().describe("Executable node oid from ui_snapshot."),
+      locator: z.string().optional().describe("Stable locator such as #accessibilityIdentifier, visible text, class name, or query expression. Preferred."),
+      oid: z.coerce.string().optional().describe("Runtime OID from ui_snapshot. Volatile; use only as last-known handle or cache hint."),
       direction: z.enum(["up", "down", "left", "right"]).describe("Scroll direction."),
       distance: z.number().positive().optional().describe("Distance in pts (default 300)."),
       animated: z.boolean().optional().describe("Whether to animate the swipe (default true)."),
       session: sessionSchema,
     },
   },
-  async ({ oid, direction, distance, animated, session }) =>
-    withToolLogging("ui_scroll", { oid, direction, distance, animated, session }, async () => {
+  async ({ locator, oid, direction, distance, animated, session }) =>
+    withToolLogging("ui_scroll", { locator, oid, direction, distance, animated, session }, async () => {
       try {
-        const result = await uiScroll({ oid, direction, distance, animated, session });
+        if (!locator && !oid) {
+          return { isError: true, content: [{ type: "text", text: "ui_scroll requires either 'locator' or 'oid'" }] };
+        }
+        const result = await uiScroll({ locator, oid, direction, distance, animated, session });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (e) {
         return { isError: true, content: [{ type: "text", text: String(e) }] };
@@ -321,13 +336,14 @@ server.registerTool(
       "no recompile needed. Use for visual debugging: tweak colors, fonts, or text " +
       "to match design spec, then read back with ui_attr_get to verify. " +
       "WARNING: Changes are ephemeral and reset on app relaunch. " +
-      "Accepts either a node OID or one plain locator string; prefer the plain locator in agent workflows. " +
+      "Accepts either a node OID or one plain locator string; prefer locator in agent workflows. " +
+      "When source is available and no stable locator exists, add an accessibilityIdentifier to the component first. " +
       "Navigation patterns (get controller OID from ui_snapshot, then use viewglass invoke): " +
       "  pop: invoke <navController-oid> popViewControllerAnimated: true — " +
       "  dismiss modal: invoke <vc-oid> dismissViewControllerAnimated:completion: true nil",
     inputSchema: {
-      oid: z.coerce.string().optional().describe("Node OID from ui_snapshot (number or string)."),
-      locator: z.string().optional().describe("Plain locator string to resolve at execution time (preferred)."),
+      oid: z.coerce.string().optional().describe("Runtime OID from ui_snapshot. Volatile; use only as last-known handle or cache hint."),
+      locator: z.string().optional().describe("Stable locator such as #accessibilityIdentifier, visible text, class name, or query expression. Preferred."),
       attr: z
         .string()
         .describe(
@@ -601,9 +617,10 @@ server.registerTool(
       "(Info.plist, .xcodeproj, or Package.swift) and call this directly. " +
       "Partial bundle ID is supported (e.g. 'ExampleApp' matches 'com.example.app'). " +
       "Returns a session string (bundleId@port) — pass it to all other Viewglass tools. " +
-      "When simulator and physical-device sessions both match the same bundle ID, ViewglassMCP prefers the physical device by default. " +
-      "Pass deviceType or set sessionDefaults.deviceType in .viewglassmcp/config.yaml to force a specific target class. " +
-      "After a successful connection, ViewglassMCP persists the resolved bundle id and device type into .viewglassmcp/config.yaml for future runs. " +
+      "If multiple sessions match the same bundle ID, ViewglassMCP does not guess. " +
+      "Pass session, port, deviceIdentifier, deviceName, or deviceType; " +
+      "or set those under sessionDefaults in .viewglassmcp/config.yaml. " +
+      "After a successful connection, ViewglassMCP persists the resolved bundle id plus target selectors into .viewglassmcp/config.yaml for future runs. " +
       "Once config.yaml has a bundleId, other Viewglass tools should usually omit session and let MCP resolve it automatically. " +
       "If the app is not found: ask the user to build and run it in Xcode (Debug scheme) and try again.",
     inputSchema: {
@@ -612,19 +629,36 @@ server.registerTool(
         .describe(
           "Bundle ID or partial name of the target app (e.g. 'com.myapp.Foo' or 'Foo')."
         ),
+      session: z
+        .string()
+        .optional()
+        .describe("Exact session in bundleId@port format. Strongest selector when known."),
+      port: z
+        .number()
+        .int()
+        .optional()
+        .describe("Exact Viewglass server port. Useful when multiple simulators run the same bundle."),
       deviceType: z
         .enum(["device", "simulator"])
         .optional()
         .describe(
-          "Optional strict target type. Use 'device' to avoid accidentally connecting to a simulator for the same bundle ID."
+          "Optional strict target type. Use with another selector if multiple simulators or devices run the same bundle."
         ),
+      deviceName: z
+        .string()
+        .optional()
+        .describe("Exact simulator/device display name from ui_scan or apps list."),
+      deviceIdentifier: z
+        .string()
+        .optional()
+        .describe("Exact physical-device UDID from ui_scan or apps list."),
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ bundleId, deviceType }) =>
-    withToolLogging("ui_connect", { bundleId, deviceType }, async () => {
+  async ({ bundleId, session, port, deviceType, deviceName, deviceIdentifier }) =>
+    withToolLogging("ui_connect", { bundleId, session, port, deviceType, deviceName, deviceIdentifier }, async () => {
       try {
-        const result = await uiConnect({ bundleId, deviceType });
+        const result = await uiConnect({ bundleId, session, port, deviceType, deviceName, deviceIdentifier });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (e) {
         return { isError: true, content: [{ type: "text", text: String(e) }] };
@@ -680,13 +714,13 @@ server.registerTool(
   "ui_input",
   {
     description:
-      "Enter text into a UITextField or UITextView by oid only. " +
+      "Enter text into a UITextField or UITextView. Prefer locator for replay; oid is only a volatile last-known runtime handle. " +
       "Dispatches text semantically via the field's input mechanism. " +
-      "First call ui_snapshot, inspect groups/nodes, then pass the exact oid here. " +
       "Returns an execution summary only. " +
       "Use ui_tap first to focus the field if needed.",
     inputSchema: {
-      oid: z.coerce.string().describe("Executable node oid from ui_snapshot."),
+      locator: z.string().optional().describe("Stable locator such as #accessibilityIdentifier, visible text, class name, or query expression. Preferred."),
+      oid: z.coerce.string().optional().describe("Runtime OID from ui_snapshot. Volatile; use only as last-known handle or cache hint."),
       text: z.string().describe("Text to type into the field."),
       session: z
         .string()
@@ -694,10 +728,13 @@ server.registerTool(
         .describe("Session in bundleId@port format. Auto-detected if omitted."),
     },
   },
-  async ({ oid, text, session }) =>
-    withToolLogging("ui_input", { oid, text, session }, async () => {
+  async ({ locator, oid, text, session }) =>
+    withToolLogging("ui_input", { locator, oid, text, session }, async () => {
       try {
-        const result = await uiInput({ oid, text, session });
+        if (!locator && !oid) {
+          return { isError: true, content: [{ type: "text", text: "ui_input requires either 'locator' or 'oid'" }] };
+        }
+        const result = await uiInput({ locator, oid, text, session });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (e) {
         return { isError: true, content: [{ type: "text", text: String(e) }] };
@@ -773,23 +810,26 @@ server.registerTool(
   "ui_dismiss",
   {
     description:
-      "Dismiss a UIViewController (modal dismiss or navigation pop) by oid only. " +
-      "First call ui_snapshot, inspect groups/nodes, then pass the exact oid here. " +
+      "Dismiss a UIViewController (modal dismiss or navigation pop). Prefer locator for replay; oid is only a volatile last-known runtime handle. " +
       "The target can be any view or node hosted by the controller. " +
       "Returns { oid, ok: true }. " +
       "Prefer this over ui_invoke popViewControllerAnimated: for standard navigation.",
     inputSchema: {
-      oid: z.coerce.string().describe("Executable node oid from ui_snapshot. Can be a view or view controller."),
+      locator: z.string().optional().describe("Stable locator such as #accessibilityIdentifier, visible text, class name, or query expression. Preferred."),
+      oid: z.coerce.string().optional().describe("Runtime OID from ui_snapshot. Can be a view or view controller. Volatile; use only as last-known handle."),
       session: z
         .string()
         .optional()
         .describe("Session in bundleId@port format. Auto-detected if omitted."),
     },
   },
-  async ({ oid, session }) =>
-    withToolLogging("ui_dismiss", { oid, session }, async () => {
+  async ({ locator, oid, session }) =>
+    withToolLogging("ui_dismiss", { locator, oid, session }, async () => {
       try {
-        const result = await uiDismiss({ oid, session });
+        if (!locator && !oid) {
+          return { isError: true, content: [{ type: "text", text: "ui_dismiss requires either 'locator' or 'oid'" }] };
+        }
+        const result = await uiDismiss({ locator, oid, session });
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (e) {
         return { isError: true, content: [{ type: "text", text: String(e) }] };

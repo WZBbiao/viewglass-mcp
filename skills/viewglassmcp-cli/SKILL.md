@@ -22,7 +22,9 @@ If the CLI is not available, use the project-local build or install path already
 - Resolve the target first, then execute the action.
 - Keep execution steps minimal and deterministic.
 
-## Step 3: Prefer Exact Targets
+## Step 3: Prefer Stable Locators
 
 - For repeated flows, use project-local `.viewglassmcp/recipes.yaml` to recover the right target.
-- Avoid guessing locators when an exact target can be derived from the current UI structure.
+- Prefer `#accessibilityIdentifier` and other stable locator signals over runtime OIDs.
+- Treat OIDs as last-known runtime handles only; they can change after relaunch.
+- If source is available and a key component lacks a stable locator, add an `accessibilityIdentifier` before relying on text/class/OID.

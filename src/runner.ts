@@ -1,12 +1,22 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { logCliFinish, logCliStart } from "./log.js";
 import { loadProjectConfig } from "./project_config.js";
+import {
+  applySessionSelectors,
+  compactSelectors,
+  matchingBundleCandidates,
+  selectByConfigFallback,
+  sessionOf,
+} from "./session_select.js";
+import type { DeviceType, RunningApp, SessionSelector } from "./session_select.js";
 
 const _execFile = promisify(execFile);
+const DIST_DIR = dirname(fileURLToPath(import.meta.url));
+const PACKAGE_ROOT = resolve(DIST_DIR, "..");
 
 /**
  * Resolve bundled viewglass binary shipped inside the npm package.
@@ -14,9 +24,8 @@ const _execFile = promisify(execFile);
  * Returns undefined in development (no bin/ dir) — falls back to PATH.
  */
 function findBundledBinary(): string | undefined {
-  const distDir = dirname(fileURLToPath(import.meta.url));
   const arch = process.arch === "arm64" ? "arm64" : "x64";
-  const p = join(distDir, "..", "bin", `viewglass-darwin-${arch}`);
+  const p = join(PACKAGE_ROOT, "bin", `viewglass-darwin-${arch}`);
   return existsSync(p) ? p : undefined;
 }
 
@@ -35,14 +44,42 @@ function findPathBinary(): string | undefined {
   return undefined;
 }
 
+function findLocalDevelopmentBinary(): string | undefined {
+  const candidates = [
+    join(PACKAGE_ROOT, "..", "lookin", ".build", "debug", "viewglass"),
+    join(PACKAGE_ROOT, "..", "lookin", ".build", "release", "viewglass"),
+  ];
+
+  return candidates.find((candidate) => existsSync(candidate));
+}
+
+export function getViewglassBinaryDiagnostics(): string {
+  const searched = [
+    process.env.VIEWGLASS_BIN
+      ? `VIEWGLASS_BIN=${process.env.VIEWGLASS_BIN}`
+      : "VIEWGLASS_BIN is not set",
+    "PATH entries for viewglass",
+    join(PACKAGE_ROOT, "bin", `viewglass-darwin-${process.arch === "arm64" ? "arm64" : "x64"}`),
+    join(PACKAGE_ROOT, "..", "lookin", ".build", "debug", "viewglass"),
+    join(PACKAGE_ROOT, "..", "lookin", ".build", "release", "viewglass"),
+  ];
+
+  return [
+    `Resolved binary: ${VIEWGLASS_BIN}`,
+    `Searched: ${searched.join("; ")}`,
+    "Fix: install viewglass, set VIEWGLASS_BIN=/absolute/path/to/viewglass, or build the sibling lookin repo with `swift build`.",
+  ].join("\n");
+}
+
 /**
  * Resolution order:
  *  1. VIEWGLASS_BIN env var (explicit override)
- *  2. "viewglass" in $PATH (development / Homebrew install)
+ *  2. "viewglass" in $PATH (Homebrew/global install)
  *  3. Bundled binary shipped with this npm package
+ *  4. Sibling lookin SwiftPM build artifact (local development checkout)
  */
 export const VIEWGLASS_BIN =
-  process.env.VIEWGLASS_BIN ?? findPathBinary() ?? findBundledBinary() ?? "viewglass";
+  process.env.VIEWGLASS_BIN ?? findPathBinary() ?? findBundledBinary() ?? findLocalDevelopmentBinary() ?? "viewglass";
 
 export interface RunResult {
   stdout: string;
@@ -158,7 +195,7 @@ function truncate(value: string, maxLength: number): string {
 }
 
 /**
- * Auto-detect the first running Viewglass session.
+ * Auto-detect a single unambiguous running Viewglass session.
  * Returns "bundleId@port" or undefined if none found.
  */
 export async function detectSession(
@@ -170,46 +207,28 @@ export async function detectSession(
     const { stdout } = await fn(VIEWGLASS_BIN, ["apps", "list", "--json"], {
       timeout: 15_000,
     });
-    const apps = JSON.parse(stdout) as Array<{
-      bundleIdentifier: string;
-      deviceType?: string;
-      port: number;
-    }>;
+    const apps = JSON.parse(stdout) as RunningApp[];
 
     const config = loadProjectConfig(projectCwd);
     const bundleId = config?.sessionDefaults?.bundleId?.trim();
-    const preferredDeviceType = config?.sessionDefaults?.deviceType;
     if (bundleId) {
-      const exactMatches = apps.filter((app) => app.bundleIdentifier === bundleId);
-      const partialMatches = apps.filter((app) => app.bundleIdentifier.toLowerCase().includes(bundleId.toLowerCase()));
-      const match = choosePreferredApp(exactMatches.length > 0 ? exactMatches : partialMatches, preferredDeviceType);
-      if (match) {
-        return `${match.bundleIdentifier}@${match.port}`;
-      }
+      const selectors = selectorsFromConfig(config?.sessionDefaults);
+      const { candidates: bundleCandidates } = matchingBundleCandidates(apps, bundleId);
+      const { candidates } = selectByConfigFallback(bundleCandidates, selectors);
+      const match = chooseUnambiguousApp(candidates);
+      return match ? sessionOf(match) : undefined;
     }
 
-    if (apps.length > 0) {
-      const a = choosePreferredApp(apps, preferredDeviceType) ?? apps[0];
-      return `${a.bundleIdentifier}@${a.port}`;
-    }
+    const match = chooseUnambiguousApp(apps);
+    return match ? sessionOf(match) : undefined;
   } catch {
     // no app running or binary not found
   }
   return undefined;
 }
 
-function choosePreferredApp<T extends { deviceType?: string }>(
-  apps: T[],
-  preferredDeviceType?: "device" | "simulator"
-): T | undefined {
-  if (apps.length === 0) return undefined;
-
-  if (preferredDeviceType) {
-    const match = apps.find((app) => app.deviceType === preferredDeviceType);
-    if (match) return match;
-  }
-
-  return apps.find((app) => app.deviceType === "device") ?? apps[0];
+function chooseUnambiguousApp<T>(apps: T[]): T | undefined {
+  return apps.length === 1 ? apps[0] : undefined;
 }
 
 function bundleIdFromSession(session?: string): string | undefined {
@@ -252,17 +271,14 @@ async function recoverSessionAfterFailure(
     const { stdout } = await exec(VIEWGLASS_BIN, ["apps", "list", "--json"], {
       timeout: 15_000,
     });
-    const apps = JSON.parse(stdout) as Array<{
-      bundleIdentifier: string;
-      deviceType?: string;
-      port: number;
-    }>;
+    const apps = JSON.parse(stdout) as RunningApp[];
     const config = loadProjectConfig(projectCwd);
-    const preferredDeviceType = config?.sessionDefaults?.deviceType;
     const matches = apps.filter((app) => app.bundleIdentifier === bundleId);
-    const app = choosePreferredApp(matches, preferredDeviceType);
+    const selectors = selectorsFromConfig(config?.sessionDefaults);
+    const { candidates } = selectByConfigFallback(matches, selectors);
+    const app = chooseUnambiguousApp(candidates);
     if (!app) return undefined;
-    return `${app.bundleIdentifier}@${app.port}`;
+    return sessionOf(app);
   } catch {
     return undefined;
   }
@@ -279,10 +295,27 @@ export async function resolveSession(
   const s = session ?? (await detectSession(exec, projectCwd));
   if (!s) {
     throw new Error(
-      "No Viewglass session found. Start the app with Viewglass enabled, or pass session as bundleId@port."
+      "No unambiguous Viewglass session found. Start the app with Viewglass enabled, pass session as bundleId@port, " +
+        "or configure sessionDefaults.bundleId plus deviceIdentifier/deviceName/deviceType in .viewglassmcp/config.yaml."
     );
   }
   return s;
+}
+
+function selectorsFromConfig(
+  sessionDefaults?: SessionSelector & { bundleId?: string }
+): SessionSelector {
+  return compactSelectors({
+    session: sessionDefaults?.session,
+    port: sessionDefaults?.port,
+    deviceType: parseDeviceType(sessionDefaults?.deviceType),
+    deviceName: sessionDefaults?.deviceName,
+    deviceIdentifier: sessionDefaults?.deviceIdentifier,
+  });
+}
+
+function parseDeviceType(value?: string): DeviceType | undefined {
+  return value === "device" || value === "simulator" ? value : undefined;
 }
 
 /** Parse JSON output from a CLI command, throwing a descriptive error on failure. */

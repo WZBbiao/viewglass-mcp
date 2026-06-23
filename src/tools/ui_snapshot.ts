@@ -111,6 +111,7 @@ interface RawHierarchy {
 interface UISnapshotNode {
   id: string;
   oid: number;
+  lastKnownOid?: number;
   primaryOid: number;
   className: string;
   oidType?: string;
@@ -120,6 +121,8 @@ interface UISnapshotNode {
   text?: string;
   searchableText: string[];
   accessibilityIdentifier?: string | null;
+  recommendedLocator?: string;
+  locatorSource?: "accessibilityIdentifier" | "visibleText" | "className" | "oid";
   visible: boolean;
   interactive: boolean;
   actions: string[];
@@ -131,7 +134,10 @@ interface UISnapshotNode {
 
 interface UISnapshotGroupItem {
   oid: number;
+  lastKnownOid?: number;
   label: string;
+  recommendedLocator?: string;
+  locatorSource?: "accessibilityIdentifier" | "label" | "oid";
   frame: RawRect;
   selected: boolean;
   selectedReason?: string;
@@ -168,9 +174,12 @@ interface UISnapshotSummary {
 
 interface UISnapshotInputCandidate {
   oid: number;
+  lastKnownOid?: number;
   inputTargetOid: number;
   actionTargetOid: number;
   label?: string;
+  recommendedLocator?: string;
+  locatorSource?: "accessibilityIdentifier" | "visibleText" | "className" | "oid";
   className: string;
   role: string;
   areaHint: string;
@@ -179,9 +188,12 @@ interface UISnapshotInputCandidate {
 
 interface UISnapshotNavigationCandidate {
   oid: number;
+  lastKnownOid?: number;
   actionTargetOid: number;
   label?: string;
   accessibilityIdentifier?: string | null;
+  recommendedLocator?: string;
+  locatorSource?: "accessibilityIdentifier" | "visibleText" | "className" | "oid";
   className: string;
   role: string;
   areaHint: string;
@@ -430,6 +442,7 @@ function buildSnapshotNode(
   return {
     id: `node_${node.oid}`,
     oid: node.oid,
+    lastKnownOid: node.oid,
     primaryOid: node.primaryOid ?? node.oid,
     className: node.className,
     oidType: node.oidType,
@@ -439,6 +452,13 @@ function buildSnapshotNode(
     text,
     searchableText,
     accessibilityIdentifier: node.accessibilityIdentifier,
+    ...recommendedLocatorForNode({
+      oid: node.oid,
+      className: node.className,
+      accessibilityIdentifier: node.accessibilityIdentifier,
+      text,
+      searchableText,
+    }),
     visible,
     interactive,
     actions,
@@ -522,6 +542,38 @@ function isReasonableNavigationTapFrame(frame: RawRect, screenSize: RawRect): bo
 
 function isGenericContainerClass(className: string): boolean {
   return /LayoutContainer|Wrapper|Platter|Transition|ContainerView|ContentView|BackgroundView|VisualEffect/i.test(className);
+}
+
+function recommendedLocatorForNode(input: {
+  oid: number;
+  className: string;
+  accessibilityIdentifier?: string | null;
+  text?: string;
+  searchableText?: string[];
+}): { recommendedLocator: string; locatorSource: "accessibilityIdentifier" | "visibleText" | "className" | "oid" } {
+  const identifier = input.accessibilityIdentifier?.trim();
+  if (identifier) {
+    return { recommendedLocator: `#${identifier}`, locatorSource: "accessibilityIdentifier" };
+  }
+
+  const text = input.text?.trim() || input.searchableText?.find((item) => isStableTextLocator(item))?.trim();
+  if (text && isStableTextLocator(text)) {
+    return { recommendedLocator: text, locatorSource: "visibleText" };
+  }
+
+  if (!isGenericContainerClass(input.className)) {
+    return { recommendedLocator: compactClassName(input.className), locatorSource: "className" };
+  }
+
+  return { recommendedLocator: `oid:${input.oid}`, locatorSource: "oid" };
+}
+
+function isStableTextLocator(value: string): boolean {
+  const text = value.trim();
+  if (!text) return false;
+  if (text.length > 64) return false;
+  if (/^Noise \d+$/i.test(text)) return false;
+  return isUsefulVisibleText(text);
 }
 
 function inferRole(node: RawNode, searchableText: string[], actions: string[], group?: UISnapshotGroup): string {
@@ -835,13 +887,21 @@ function makeGroup(
   items: Array<{ target: RawNode; texts: string[]; selectedReason?: string }>
 ): UISnapshotGroup | undefined {
   const groupItems = items
-    .map((item) => ({
-      oid: item.target.primaryOid ?? item.target.oid,
-      label: item.texts[0],
-      frame: item.target.frame,
-      selected: Boolean(item.selectedReason),
-      selectedReason: item.selectedReason,
-    }))
+    .map((item) => {
+      const oid = item.target.primaryOid ?? item.target.oid;
+      const label = item.texts[0];
+      const stable = recommendedLocatorForGroupItem(item.target, label);
+      return {
+        oid,
+        lastKnownOid: oid,
+        label,
+        recommendedLocator: stable.recommendedLocator,
+        locatorSource: stable.locatorSource,
+        frame: item.target.frame,
+        selected: Boolean(item.selectedReason),
+        selectedReason: item.selectedReason,
+      };
+    })
     .filter((item) => Boolean(item.label)) as UISnapshotGroupItem[];
   if (groupItems.length < 2) return undefined;
 
@@ -871,6 +931,21 @@ function makeGroup(
     selectedOid,
     selectedReason,
   };
+}
+
+function recommendedLocatorForGroupItem(
+  target: RawNode,
+  label?: string
+): { recommendedLocator: string; locatorSource: "accessibilityIdentifier" | "label" | "oid" } {
+  const identifier = target.accessibilityIdentifier?.trim();
+  if (identifier) {
+    return { recommendedLocator: `#${identifier}`, locatorSource: "accessibilityIdentifier" };
+  }
+  const text = label?.trim();
+  if (text && isStableTextLocator(text)) {
+    return { recommendedLocator: text, locatorSource: "label" };
+  }
+  return { recommendedLocator: `oid:${target.primaryOid ?? target.oid}`, locatorSource: "oid" };
 }
 
 function dedupeGroupItems(
@@ -1003,9 +1078,12 @@ function buildInputCandidates(nodes: UISnapshotNode[], screenSize: RawRect): UIS
     .sort(sortNodes)
     .map((node) => ({
       oid: node.oid,
+      lastKnownOid: node.oid,
       inputTargetOid: node.inputTargetOid ?? node.oid,
       actionTargetOid: node.actionTargetOid,
       label: truncateText(node.text),
+      recommendedLocator: node.recommendedLocator,
+      locatorSource: node.locatorSource,
       className: compactClassName(node.className),
       role: node.role,
       areaHint: areaHintForFrame(node.frame, screenSize),
@@ -1046,9 +1124,12 @@ function buildNavigationCandidates(nodes: UISnapshotNode[], screenSize: RawRect)
     .sort(sortNodes)
     .map((node) => ({
       oid: node.oid,
+      lastKnownOid: node.oid,
       actionTargetOid: node.actionTargetOid,
       label: truncateText(node.text),
       accessibilityIdentifier: node.accessibilityIdentifier,
+      recommendedLocator: node.recommendedLocator,
+      locatorSource: node.locatorSource,
       className: compactClassName(node.className),
       role: node.role,
       areaHint: areaHintForFrame(node.frame, screenSize),

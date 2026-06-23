@@ -1,9 +1,12 @@
 import { runCLI, resolveSession, parseJSON } from "../runner.js";
 import type { ExecFn } from "../runner.js";
+import { resolveUniqueNodeLocator } from "./locator.js";
 
 export interface UIAttrGetInput {
-  /** Node OID obtained from ui_snapshot. */
-  oid: string;
+  /** Stable locator such as an accessibilityIdentifier. Preferred for replay. */
+  locator?: string;
+  /** Runtime OID obtained from ui_snapshot. Not stable across app launches. */
+  oid?: string;
   /**
    * Attribute keys to return (e.g. ["frame", "backgroundColor", "text"]).
    * If omitted, all attributes are returned.
@@ -16,15 +19,23 @@ export interface UIAttrGetInput {
 }
 
 /**
- * Get attributes of a UI node by OID.
- * Returns a map of { attrKey: value }. Use ui_snapshot first to get the OID.
+ * Get attributes of a UI node by stable locator or OID.
+ * Returns a map of { attrKey: value }. Prefer ui_snapshot.recommendedLocator
+ * or #accessibilityIdentifier for reusable flows.
  */
 export async function uiAttrGet(
   input: UIAttrGetInput,
   exec?: ExecFn
 ): Promise<Record<string, unknown>> {
+  if (!input.locator && !input.oid) {
+    throw new Error("ui_attr_get requires either 'locator' or 'oid'. Prefer locator for reusable flows.");
+  }
   const session = await resolveSession(input.session, exec);
-  const { stdout } = await runCLI(["attr", "get", input.oid, "--json"], {
+  const resolved = input.locator
+    ? await resolveUniqueNodeLocator(input.locator, session, exec)
+    : undefined;
+  const target = resolved?.resolvedTarget ?? input.oid!;
+  const { stdout } = await runCLI(["attr", "get", target, "--json"], {
     session,
     exec,
   });

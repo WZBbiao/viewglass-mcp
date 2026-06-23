@@ -421,11 +421,19 @@ describe("uiSnapshot", () => {
     expect(gameLabel?.actionTargetOid).toBe(210);
     expect(gameLabel?.groupId).toBe("group_bottom_1");
     expect(gameLabel?.searchableText).toContain("遊戲");
+    expect(gameLabel?.recommendedLocator).toBe("遊戲");
+    expect(gameLabel?.locatorSource).toBe("visibleText");
+    expect(gameLabel?.lastKnownOid).toBe(211);
 
     const meLabel = result.nodes.find((node) => node.oid === 232);
     expect(meLabel?.text).toBe("Me");
     expect(meLabel?.actionTargetOid).toBe(230);
     expect(meLabel?.groupId).toBe("group_bottom_1");
+    expect(result.groups[0]?.items[0]).toEqual(expect.objectContaining({
+      lastKnownOid: 210,
+      recommendedLocator: "遊戲",
+      locatorSource: "label",
+    }));
     expect(result.matchedRecipes).toEqual([]);
   });
 
@@ -470,6 +478,9 @@ describe("uiSnapshot", () => {
         actionTargetOid: 301,
         areaHint: "middleLeft",
         label: "Create Post",
+        recommendedLocator: "Create Post",
+        locatorSource: "visibleText",
+        lastKnownOid: 301,
       })
     );
   });
@@ -503,9 +514,12 @@ describe("uiSnapshot", () => {
     const candidate = result.summary.inputCandidates?.find((item) => item.oid === 500);
     expect(candidate).toEqual(expect.objectContaining({
       oid: 500,
+      lastKnownOid: 500,
       inputTargetOid: 500,
       className: "TapUIKit.TapTextView",
       role: "input",
+      recommendedLocator: "Write a review",
+      locatorSource: "visibleText",
     }));
 
     const node = result.nodes.find((item) => item.oid === 500);

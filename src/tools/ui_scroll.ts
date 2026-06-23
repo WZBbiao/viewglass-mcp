@@ -1,12 +1,15 @@
 import { parseJSON, runCLI, resolveSession } from "../runner.js";
 import type { ExecFn } from "../runner.js";
+import { resolveActionLocator } from "./locator.js";
 import { MUTATION_TIMEOUT_MS } from "./timeouts.js";
 
 export type ScrollDirection = "up" | "down" | "left" | "right";
 
 export interface UIScrollInput {
-  /** Executable node oid from ui_snapshot. */
-  oid: string;
+  /** Stable locator such as an accessibilityIdentifier. Preferred for replay. */
+  locator?: string;
+  /** Runtime OID from ui_snapshot. Not stable across app launches. */
+  oid?: string;
   /** Scroll direction. */
   direction: ScrollDirection;
   /** Distance in pts. Defaults to 300 if omitted. */
@@ -89,18 +92,25 @@ export async function uiScroll(
 ): Promise<{
   ok: true;
   oid: string;
+  locator?: string;
   resolvedOid?: string;
+  matchedBy?: string;
+  candidateCount?: number;
   direction: ScrollDirection;
   distance: number;
   strategyUsed: "swipe";
   targetClass?: string;
 }> {
-  if (!input.oid || String(input.oid).trim() === "") {
-    throw new Error("ui_scroll requires an exact oid from ui_snapshot. First inspect ui_snapshot.groups/nodes, then pass that oid to ui_scroll.");
+  if (!input.locator && !input.oid) {
+    throw new Error("ui_scroll requires either 'locator' or 'oid'. Prefer locator for reusable flows.");
   }
   const session = await resolveSession(input.session, exec);
   const dist = input.distance ?? 300;
-  const resolved = await resolveScrollTarget(input.oid, session, exec);
+  const locatorResolved = input.locator
+    ? await resolveActionLocator(input.locator, session, "scroll", exec)
+    : undefined;
+  const target = locatorResolved?.resolvedTarget ?? input.oid!;
+  const resolved = await resolveScrollTarget(target, session, exec);
   const swipeDirection = SWIPE_DIRECTION[input.direction];
   const args = [
     "swipe",
@@ -118,18 +128,27 @@ export async function uiScroll(
   const result: {
     ok: true;
     oid: string;
+    locator?: string;
     resolvedOid?: string;
+    matchedBy?: string;
+    candidateCount?: number;
     direction: ScrollDirection;
     distance: number;
     strategyUsed: "swipe";
     targetClass?: string;
   } = {
     ok: true,
-    oid: input.oid,
+    oid: target,
     direction: input.direction,
     distance: dist,
     strategyUsed: "swipe",
   };
+  if (input.locator) result.locator = input.locator;
+  if (locatorResolved) {
+    result.resolvedOid = resolved.oid;
+    result.matchedBy = locatorResolved.matchedBy;
+    result.candidateCount = locatorResolved.candidateCount;
+  }
   if (resolved.resolvedFromOid) result.resolvedOid = resolved.oid;
   if (action.targetClass ?? resolved.className) result.targetClass = action.targetClass ?? resolved.className;
   return result;

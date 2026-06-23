@@ -11,18 +11,21 @@ Use Viewglass MCP tools to inspect and interact with a live iOS app.
 
 - For navigation, custom UI, tab switching, settings pages, or any unknown screen, start with `ui_snapshot`.
 - Treat `ui_snapshot` as the source of truth for the current page.
-- Default `ui_snapshot` output is a compact action index. Use `summary`, `groups`, `navigationCandidates`, `nodes`, and `matchedRecipes` to identify the correct target.
-- Prefer `summary.inputCandidates[].inputTargetOid` for text entry when available.
-- Use `ui_screenshot` for visual layout and `ui_attr_get` for long text or detailed attributes after the target `oid` is known.
+- Default `ui_snapshot` output is a compact action index. Use `recommendedLocator`, `summary`, `groups`, `navigationCandidates`, `nodes`, and `matchedRecipes` to identify the correct target.
+- Prefer `#accessibilityIdentifier` and `recommendedLocator` for repeatable actions.
+- Use `ui_screenshot` for visual layout and `ui_attr_get` for long text or detailed attributes after the target locator is known.
 - Use `mode=fullIndex` only when the compact action index is insufficient.
-- Do not try to scan for sessions manually. If `.viewglassmcp/config.yaml` already has a `bundleId`, let ViewglassMCP resolve the session automatically.
+- Do not try to guess sessions manually. If `.viewglassmcp/config.yaml` already has a `bundleId` plus stable selectors, let ViewglassMCP resolve the session automatically.
+- If `ui_connect` reports multiple sessions for the same bundle, choose using `session`, `port`, `deviceIdentifier`, `deviceName`, or `deviceType`; prefer `deviceIdentifier`/`deviceName`/`deviceType` over last-known `session`/`port`.
 
-## Step 2: Resolve an Exact OID Before Executing
+## Step 2: Execute With Stable Locator First
 
-- `ui_tap`, `ui_scroll`, `ui_input`, and `ui_dismiss` require an exact `oid` from `ui_snapshot`.
-- For page/list scrolling, use `ui_scroll` on the best visible container/cell oid; it resolves wrapper/cell targets to the real scroll view and performs a swipe-style scroll.
+- `ui_tap`, `ui_scroll`, `ui_input`, `ui_attr_get`, and `ui_dismiss` accept `locator` first and `oid` as fallback.
+- `oid` / `lastKnownOid` are runtime handles. They may be cached in recipes, but replay must try stable locator signals before oid.
+- For page/list scrolling, use `ui_scroll` with a stable locator for the best visible container/cell; it resolves wrapper/cell targets to the real scroll view and performs a swipe-style scroll.
+- If source is available and the target lacks a stable locator, add an `accessibilityIdentifier` to the component before relying on text/class/oid.
 - Do not guess UIKit private class names before reading the snapshot.
-- Prefer visible labels, `groups`, `searchableText`, `actionTargetOid`, and stable structure over temporary runtime details.
+- Prefer `accessibilityIdentifier`, visible labels, `groups`, `searchableText`, `actionTargetOid`, and stable structure over temporary runtime details.
 
 ## Step 3: Verify Transitions Explicitly
 
@@ -42,10 +45,10 @@ Rules:
 - The bundled `recipes.yaml` template is intentionally empty and generic. Add project-specific entries only after successful live runs in the current project.
 - If the task is likely to repeat and `.viewglassmcp/` does not exist in the current project, create it automatically.
 - Use the package templates as the initial content source.
-- Persist the app bundle id in `.viewglassmcp/config.yaml` once it is known for the project.
+- Persist the app bundle id and, when needed, stable device selectors in `.viewglassmcp/config.yaml` once they are known for the project.
 - After a reusable live task succeeds, you must update `.viewglassmcp/recipes.yaml` in the same session before finishing the task.
 - If the task is blocked, unusually inefficient, or exposes a ViewglassMCP bad case, call `ui_feedback` before finishing.
-- Do not store runtime `oid` as durable identity.
+- Do not store runtime `oid` as the only durable identity. It may be saved as `lastKnownOid` cache metadata only.
 - Prefer multi-signal recipes: `controllerHints`, `groupRole`, `searchableTextAny`, `accessibilityIdAny`, `classHints`, `areaHint`, and `success`.
 
 ## Step 5: Send Feedback For Iteration
@@ -65,5 +68,6 @@ Avoid these:
 - starting with repeated locator guesses to figure out the current page
 - guessing `UITabBar`, `UITabBarButton`, or private wrappers before reading the snapshot
 - trying to use execution tools as search tools
+- replaying a recipe by `oid` before trying its stable locator signals
 - repeatedly requesting large snapshots instead of using screenshots for visual context and targeted attribute reads for details
 - finishing a blocked or inefficient flow without recording `ui_feedback`

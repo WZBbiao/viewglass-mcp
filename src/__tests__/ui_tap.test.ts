@@ -4,6 +4,42 @@ import type { ExecFn } from "../runner.js";
 
 function makeExec(): ExecFn {
   return vi.fn().mockImplementation(async (_bin: string, args: string[]) => {
+    if (args[0] === "query") {
+      if (args[1] === "#submit_button") {
+        return { stdout: JSON.stringify([{ oid: 42, primaryOid: 42 }]), stderr: "" };
+      }
+      return { stdout: "[]", stderr: "" };
+    }
+    if (args[0] === "hierarchy") {
+      const windows = args.includes("--filter")
+        ? []
+        : [
+            {
+              node: {
+                oid: 90,
+                primaryOid: 90,
+                className: "UIView",
+                frame: { x: 0, y: 0, width: 100, height: 100 },
+                isHidden: false,
+                alpha: 1,
+                isUserInteractionEnabled: true,
+                accessibilityIdentifier: "coordinate_wrapper",
+              },
+              children: [],
+            },
+          ];
+      return {
+        stdout: JSON.stringify({
+          appInfo: { appName: "FixtureApp", bundleIdentifier: "com.test", serverVersion: "0.1.0" },
+          fetchedAt: "2026-04-15T10:00:00Z",
+          screenScale: 3,
+          screenSize: { x: 0, y: 0, width: 390, height: 844 },
+          snapshotId: "snap-tap",
+          windows,
+        }),
+        stderr: "",
+      };
+    }
     return { stdout: JSON.stringify({ success: true, action: "tap", targetClass: "UIButton", mode: "semantic", detail: "Triggered UIControlEventTouchUpInside", strategyUsed: "semantic" }), stderr: "" };
   });
 }
@@ -16,6 +52,34 @@ describe("uiTap", () => {
     expect(cmds).toEqual(["tap"]);
     const tapCall = (exec.mock.calls as [string, string[]][]).find((c) => c[1][0] === "tap");
     expect(tapCall?.[1]).toEqual(["tap", "42", "--json", "--session", "com.test@1234"]);
+  });
+
+  it("resolves locator before tapping", async () => {
+    const exec = makeExec() as ReturnType<typeof vi.fn>;
+    const result = await uiTap({ locator: "submit_button", session: "com.test@1234" }, exec);
+    const tapCall = (exec.mock.calls as [string, string[]][]).find((c) => c[1][0] === "tap");
+    expect(tapCall?.[1]).toEqual(["tap", "42", "--json", "--session", "com.test@1234"]);
+    expect(result).toEqual(expect.objectContaining({
+      oid: "42",
+      locator: "submit_button",
+      resolvedOid: "42",
+      matchedBy: "query fallback",
+      candidateCount: 1,
+    }));
+  });
+
+  it("uses the matched node oid for tap locators so coordinate fallback can run", async () => {
+    const exec = makeExec() as ReturnType<typeof vi.fn>;
+    const result = await uiTap({ locator: "#coordinate_wrapper", session: "com.test@1234" }, exec);
+    const tapCall = (exec.mock.calls as [string, string[]][]).find((c) => c[1][0] === "tap");
+    expect(tapCall?.[1]).toEqual(["tap", "90", "--json", "--session", "com.test@1234"]);
+    expect(result).toEqual(expect.objectContaining({
+      oid: "90",
+      locator: "#coordinate_wrapper",
+      resolvedOid: "90",
+      matchedBy: "accessibilityIdentifier",
+      candidateCount: 1,
+    }));
   });
 
   it("uses a 30s process timeout for tap mutations", async () => {
@@ -64,10 +128,10 @@ describe("uiTap", () => {
     expect(exec.mock.calls[0][1]).toEqual(["tap", "123", "--json", "--session", "com.test@1234"]);
   });
 
-  it("rejects missing oid", async () => {
+  it("rejects missing target", async () => {
     const exec = makeExec();
-    await expect(uiTap({ oid: "" as string, session: "com.test@1234" }, exec)).rejects.toThrow(
-      "ui_tap requires an exact oid from ui_snapshot"
+    await expect(uiTap({ session: "com.test@1234" }, exec)).rejects.toThrow(
+      "ui_tap requires either 'locator' or 'oid'"
     );
   });
 });

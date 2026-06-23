@@ -1,15 +1,19 @@
 import { parseJSON, runCLI, resolveSession } from "../runner.js";
 import type { ExecFn } from "../runner.js";
+import { resolveUniqueNodeLocator } from "./locator.js";
 import { MUTATION_TIMEOUT_MS } from "./timeouts.js";
 
 export interface UITapInput {
   /**
-   * Executable node oid from ui_snapshot.
-   * ui_tap no longer performs target search or locator resolution.
-   * Agents should first call ui_snapshot, inspect groups/nodes,
-   * then pass the exact oid here.
+   * Stable locator such as an accessibilityIdentifier. Preferred for replay.
+   * Bare strings are resolved as accessibility identifiers first, then text.
    */
-  oid: string;
+  locator?: string;
+  /**
+   * Runtime OID from ui_snapshot. Useful as a last-known handle or cache hint,
+   * but it is not stable across app launches.
+   */
+  oid?: string;
   /** Viewglass session in bundleId@port format. Auto-detected if omitted. */
   session?: string;
 }
@@ -28,6 +32,10 @@ export async function uiTap(
 ): Promise<{
   ok: true;
   oid: string;
+  locator?: string;
+  resolvedOid?: string;
+  matchedBy?: string;
+  candidateCount?: number;
   strategyUsed: "semantic" | "coordinateSemantic" | string;
   action?: string;
   targetClass?: string;
@@ -38,11 +46,15 @@ export async function uiTap(
   hitOid?: string;
   hitClass?: string;
 }> {
-  if (!input.oid || String(input.oid).trim() === "") {
-    throw new Error("ui_tap requires an exact oid from ui_snapshot. First inspect ui_snapshot.groups/nodes, then pass that oid to ui_tap.");
+  if (!input.locator && !input.oid) {
+    throw new Error("ui_tap requires either 'locator' or 'oid'. Prefer locator for reusable flows.");
   }
   const session = await resolveSession(input.session, exec);
-  const result = await runCLI(["tap", input.oid, "--json"], { session, exec, timeoutMs: MUTATION_TIMEOUT_MS });
+  const resolved = input.locator
+    ? await resolveUniqueNodeLocator(input.locator, session, exec)
+    : undefined;
+  const target = resolved?.resolvedTarget ?? input.oid!;
+  const result = await runCLI(["tap", target, "--json"], { session, exec, timeoutMs: MUTATION_TIMEOUT_MS });
   const action = parseJSON<{
     strategyUsed?: string;
     action?: string;
@@ -58,6 +70,10 @@ export async function uiTap(
   const output: {
     ok: true;
     oid: string;
+    locator?: string;
+    resolvedOid?: string;
+    matchedBy?: string;
+    candidateCount?: number;
     strategyUsed: string;
     action?: string;
     targetClass?: string;
@@ -69,9 +85,15 @@ export async function uiTap(
     hitClass?: string;
   } = {
     ok: true,
-    oid: input.oid,
+    oid: target,
     strategyUsed: action.strategyUsed ?? "semantic",
   };
+  if (input.locator) output.locator = input.locator;
+  if (resolved) {
+    output.resolvedOid = resolved.resolvedTarget;
+    output.matchedBy = resolved.matchedBy;
+    output.candidateCount = resolved.candidateCount;
+  }
   if (action.action) output.action = action.action;
   if (action.targetClass) output.targetClass = action.targetClass;
   if (action.mode) output.mode = action.mode;

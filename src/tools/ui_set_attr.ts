@@ -31,14 +31,24 @@ export interface UISetAttrInput {
 export async function uiSetAttr(
   input: UISetAttrInput,
   exec?: ExecFn
-): Promise<{ oid?: string; locator?: string; attr: string; value: string; ok: true }> {
+): Promise<{
+  oid?: string;
+  locator?: string;
+  resolvedOid?: string;
+  matchedBy?: string;
+  candidateCount?: number;
+  attr: string;
+  value: string;
+  ok: true;
+}> {
   const session = await resolveSession(input.session, exec);
   if (!input.locator && !input.oid) {
     throw new Error("ui_set_attr requires either 'oid' or 'locator'");
   }
-  const target = input.oid
-    ? input.oid
-    : (await resolveUniqueNodeLocator(input.locator!, session, exec)).resolvedTarget;
+  const resolved = input.locator
+    ? await resolveUniqueNodeLocator(input.locator, session, exec)
+    : undefined;
+  const target = resolved?.resolvedTarget ?? input.oid!;
   const cliAttr = normalizeCLIAttr(input.attr);
   // CLI syntax: attr set <target> <key> <value> [--session <s>]
   await runCLI(["attr", "set", target, cliAttr, input.value], {
@@ -46,13 +56,28 @@ export async function uiSetAttr(
     exec,
     timeoutMs: 30_000,
   });
-  return {
+  const output: {
+    oid?: string;
+    locator?: string;
+    resolvedOid?: string;
+    matchedBy?: string;
+    candidateCount?: number;
+    attr: string;
+    value: string;
+    ok: true;
+  } = {
     oid: input.oid,
     locator: input.locator,
     attr: input.attr,
     value: input.value,
     ok: true,
   };
+  if (resolved) {
+    output.resolvedOid = resolved.resolvedTarget;
+    output.matchedBy = resolved.matchedBy;
+    output.candidateCount = resolved.candidateCount;
+  }
+  return output;
 }
 
 function normalizeCLIAttr(attr: string): string {

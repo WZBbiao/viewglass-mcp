@@ -19,20 +19,20 @@ When ViewglassMCP starts normally, it now bootstraps itself automatically like `
 
 | Tool | Description |
 |---|---|
-| `ui_snapshot` | Capture an agent-first UI snapshot with summary, navigation candidates, budgeted searchable nodes, matched recipes, and optional rawTree. |
-| `ui_attr_get` | Get runtime attributes of a node by OID. |
-| `ui_tap` | Tap a node by exact `oid` from `ui_snapshot`. Supports UIControl, gesture-backed views, UITableViewCell, and UICollectionViewCell. |
-| `ui_scroll` | Scroll by exact `oid`; resolves wrapper/cell targets to a real scroll view and performs a swipe-style scroll. |
+| `ui_snapshot` | Capture an agent-first UI snapshot with summary, recommended locators, navigation candidates, matched recipes, and optional rawTree. |
+| `ui_attr_get` | Get runtime attributes by stable locator or volatile runtime OID. |
+| `ui_tap` | Tap by stable locator first, with OID fallback. Supports UIControl, gesture-backed views, UITableViewCell, and UICollectionViewCell. |
+| `ui_scroll` | Scroll by stable locator first, with OID fallback; resolves wrapper/cell targets to a real scroll view. |
 | `ui_set_attr` | Set an attribute on a node at runtime (live, no recompile). |
 | `ui_invoke` | Call any ObjC selector on any node — the highest-leverage tool. |
 | `ui_wait` | Poll until a node appears, disappears, or an attribute matches. |
 | `ui_assert` | Assert visibility, text, count, or attribute — fails as MCP error. |
 | `ui_connect` | Resolve and pin the active session to a specific app bundle id. |
 | `ui_screenshot` | Capture a PNG of the full screen or a specific node. |
-| `ui_input` | Type text into a UITextField / UITextView by exact `oid` from `ui_snapshot` and return an execution summary. |
+| `ui_input` | Type text into a UITextField / UITextView by stable locator first, with OID fallback. |
 | `ui_swipe` | Swipe a node in a direction. |
 | `ui_long_press` | Long-press a node. |
-| `ui_dismiss` | Dismiss a presented view controller by exact `oid` from `ui_snapshot` and return an execution summary. |
+| `ui_dismiss` | Dismiss a presented view controller by stable locator first, with OID fallback. |
 | `compare_with_design` | Screenshot device + return Figma URL for Vision diff. |
 
 ## Recommended agent workflow
@@ -40,24 +40,24 @@ When ViewglassMCP starts normally, it now bootstraps itself automatically like `
 For page navigation, settings flows, tab switching, and custom UI:
 
 1. Start with `ui_snapshot`
-   - Default output is a small action index: visible labels, groups, navigation candidates, and likely action targets.
+   - Default output is a small action index: visible labels, groups, `recommendedLocator`, navigation candidates, and likely action targets.
    - For textless settings/profile icons, inspect `summary.navigationCandidates` and `areaHint` such as `topRight`.
-   - Use `ui_screenshot` for visual layout and `ui_attr_get` for long text or detailed attributes after you know the `oid`.
+   - Use `ui_screenshot` for visual layout and `ui_attr_get` for long text or detailed attributes after you know the stable locator.
    - Use `mode=fullIndex` only when the default action index is insufficient.
    - Treat it as the source of truth for "where am I right now?".
-2. Then use execution tools with exact `oid`
-   - Extract the exact target `oid` from `ui_snapshot.groups` or `ui_snapshot.nodes`.
-   - `ui_tap`, `ui_scroll`, `ui_input`, and `ui_dismiss` all require `oid`.
-   - Prefer user-visible labels in the snapshot over UIKit private class guesses.
+2. Then use execution tools with stable locators
+   - Prefer `recommendedLocator`, especially `#accessibilityIdentifier`.
+   - `oid` and `lastKnownOid` are volatile runtime handles. They are acceptable cache hints, but replay must try stable locator first.
+   - If source code is available and the target lacks a stable locator, add an `accessibilityIdentifier` to the component before relying on text/class/oid.
 3. Use `ui_wait` or another `ui_snapshot` to verify transitions
    - Do not assume a tap has finished a navigation animation unless you verify it.
-4. Use `ui_attr_get` only after the correct node is known
+4. Use `ui_attr_get` only after the correct target is known
    - This is for reading precise runtime values such as text color or font.
 
 Avoid this pattern:
 
 - guessing `UITabBar`, `UITabBarButton`, `UIButton`, or private UIKit classes first
-- passing guessed labels to `ui_tap` instead of first locating an exact `oid` in `ui_snapshot`
+- saving only an `oid` in a recipe without a stable locator or success check
 - trying to infer the current page from repeated locator guesses instead of starting with `ui_snapshot`
 - taking a screenshot before checking the structured snapshot, unless the task is explicitly visual
 
@@ -71,7 +71,8 @@ For repeated flows, keep project-local experience under:
 
 These files are maintained by the agent after successful live runs.
 Use `config.yaml` for stable project defaults like the app bundle identifier.
-Use `recipes.yaml` for reusable target-finding recipes, not fragile runtime `oid` values.
+Use `recipes.yaml` for reusable target-finding recipes. It may keep `lastKnownOid`
+as a cache hint, but durable identity should be stable locator signals.
 
 Recommended config / recipe signals:
 
@@ -82,6 +83,7 @@ Recommended config / recipe signals:
 - `classHints`
 - `areaHint`
 - `success`
+- `lastKnownOid` only as a volatile cache hint
 
 Templates are included in this package under:
 
@@ -138,8 +140,9 @@ npm install -g viewglass-mcp
 ### Session
 
 All tools accept an optional `session` in `bundleId@port` format (e.g. `com.example.App@47164`).
-If omitted, ViewglassMCP first checks `.viewglassmcp/config.yaml` for `sessionDefaults.bundleId` and prefers the matching running app. If no config match exists, it falls back to the first detected running app.
-The agent should usually rely on this automatic resolution instead of trying to scan for sessions manually.
+If omitted, ViewglassMCP checks `.viewglassmcp/config.yaml` for `sessionDefaults.bundleId` plus optional selectors.
+When multiple sessions match the same bundle ID, ViewglassMCP does not guess; provide `session`, `port`, `deviceIdentifier`, `deviceName`, or `deviceType`, or set them under `sessionDefaults`.
+Prefer stable selectors such as `deviceIdentifier`, `deviceName`, and `deviceType`; treat `session` and `port` as last-known runtime hints because they can change after relaunch.
 
 ### Override binary
 

@@ -22,6 +22,9 @@ export interface UISwipeInput {
 
 export interface UISwipeResult {
   target: string;
+  resolvedOid: string;
+  matchedBy: string;
+  candidateCount: number;
   direction: SwipeDirection;
   distance: number;
   ok: true;
@@ -56,6 +59,9 @@ export async function uiSwipe(
   await runCLI(cliArgs, { session, exec, timeoutMs: MUTATION_TIMEOUT_MS });
   return {
     target: input.target,
+    resolvedOid: resolved.resolvedTarget,
+    matchedBy: resolved.matchedBy,
+    candidateCount: resolved.candidateCount,
     direction: input.direction,
     distance: dist,
     ok: true,

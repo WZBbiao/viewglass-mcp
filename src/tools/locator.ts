@@ -19,6 +19,7 @@ type SnapshotLikeNode = {
   searchableText: string[];
   accessibilityIdentifier?: string | null;
   actionTargetOid?: number;
+  inputTargetOid?: number;
 };
 
 export interface ResolvedLocator {
@@ -77,6 +78,13 @@ function parseLegacyLocator(raw: string): string | undefined {
   }
 
   return undefined;
+}
+
+function parseAccessibilityIdentifierLocator(raw: string): string | undefined {
+  const value = raw.trim();
+  if (!value.startsWith("#")) return undefined;
+  const identifier = value.slice(1).trim();
+  return identifier.length > 0 ? identifier : undefined;
 }
 
 export function buildQueryExpressions(raw: string): string[] {
@@ -149,15 +157,16 @@ function supportsAction(actions: string[], action: ActionKind): boolean {
 }
 
 function uniqueResolvedTarget(
-  candidates: Array<{ actionTargetOid?: number }>,
+  candidates: Array<{ oid?: number; primaryOid?: number; actionTargetOid?: number; inputTargetOid?: number }>,
   input: string,
-  matchedBy: string
+  matchedBy: string,
+  action: ActionKind
 ): ResolvedLocator | undefined {
   const unique = [
     ...new Set(
       candidates
-        .map((candidate) => candidate.actionTargetOid)
-        .filter((oid): oid is number => oid !== undefined)
+        .map((candidate) => actionTargetForCandidate(candidate, action))
+        .filter((oid): oid is number => oid !== undefined && oid !== null)
     ),
   ];
   if (unique.length !== 1) return undefined;
@@ -167,6 +176,17 @@ function uniqueResolvedTarget(
     matchedBy,
     candidateCount: candidates.length,
   };
+}
+
+function actionTargetForCandidate(
+  candidate: { oid?: number; primaryOid?: number; actionTargetOid?: number; inputTargetOid?: number },
+  action: ActionKind
+): number | undefined {
+  if (action === "tap") return candidate.actionTargetOid ?? candidate.primaryOid ?? candidate.oid;
+  if (action === "input") return candidate.inputTargetOid ?? candidate.primaryOid ?? candidate.oid ?? candidate.actionTargetOid;
+  if (action === "scroll") return candidate.primaryOid ?? candidate.oid ?? candidate.actionTargetOid;
+  if (action === "dismiss") return candidate.primaryOid ?? candidate.oid ?? candidate.actionTargetOid;
+  return candidate.actionTargetOid ?? candidate.primaryOid ?? candidate.oid;
 }
 
 function classifySnapshotNodes(raw: string, nodes: SnapshotLikeNode[]) {
@@ -274,8 +294,9 @@ export async function resolveUniqueNodeLocator(
   const value = raw.trim();
   if (!value) throw new Error("locator must be a non-empty string");
 
+  const explicitAccessibilityIdentifier = parseAccessibilityIdentifierLocator(value);
   const legacy = parseLegacyLocator(value);
-  if (legacy || /^\d+$/.test(value)) {
+  if (!explicitAccessibilityIdentifier && (legacy || /^\d+$/.test(value))) {
     return {
       input: value,
       resolvedTarget: value,
@@ -284,9 +305,22 @@ export async function resolveUniqueNodeLocator(
     };
   }
 
-  const snapshot = await uiSnapshot({ session, compact: true, mode: "fullIndex", maxNodes: 0 }, exec);
+  let snapshot: Awaited<ReturnType<typeof uiSnapshot>>;
+  try {
+    snapshot = await uiSnapshot({ session, compact: true, mode: "fullIndex", maxNodes: 0 }, exec);
+  } catch (error) {
+    if (explicitAccessibilityIdentifier) {
+      return {
+        input: value,
+        resolvedTarget: value,
+        matchedBy: "legacy locator",
+        candidateCount: 1,
+      };
+    }
+    throw error;
+  }
   const { exactAccessibility, exactText, containsText, classMatches } = classifySnapshotNodes(
-    value,
+    explicitAccessibilityIdentifier ?? value,
     snapshot.nodes
   );
   const { exact: exactGroupLabels, contains: containsGroupLabels } = classifyGroups(value, snapshot.groups);
@@ -365,6 +399,15 @@ export async function resolveUniqueNodeLocator(
     );
   }
 
+  if (explicitAccessibilityIdentifier) {
+    return {
+      input: value,
+      resolvedTarget: value,
+      matchedBy: "legacy locator",
+      candidateCount: 1,
+    };
+  }
+
   throw new Error(`Locator '${value}' matched no targets.`);
 }
 
@@ -377,8 +420,9 @@ export async function resolveActionLocator(
   const value = raw.trim();
   if (!value) throw new Error("locator must be a non-empty string");
 
+  const explicitAccessibilityIdentifier = parseAccessibilityIdentifierLocator(value);
   const legacy = parseLegacyLocator(value);
-  if (legacy || /^\d+$/.test(value)) {
+  if (!explicitAccessibilityIdentifier && (legacy || /^\d+$/.test(value))) {
     return {
       input: value,
       resolvedTarget: value,
@@ -387,10 +431,25 @@ export async function resolveActionLocator(
     };
   }
 
-  const snapshot = await uiSnapshot({ session, compact: true, mode: "fullIndex", maxNodes: 0 }, exec);
-  const actionNodes = snapshot.nodes.filter((node) => supportsAction(node.actions, action));
+  let snapshot: Awaited<ReturnType<typeof uiSnapshot>>;
+  try {
+    snapshot = await uiSnapshot({ session, compact: true, mode: "fullIndex", maxNodes: 0 }, exec);
+  } catch (error) {
+    if (explicitAccessibilityIdentifier) {
+      return {
+        input: value,
+        resolvedTarget: value,
+        matchedBy: "legacy locator",
+        candidateCount: 1,
+      };
+    }
+    throw error;
+  }
+  const actionNodes = action === "dismiss"
+    ? snapshot.nodes
+    : snapshot.nodes.filter((node) => supportsAction(node.actions, action));
   const { exactAccessibility, exactText, containsText, classMatches } = classifySnapshotNodes(
-    value,
+    explicitAccessibilityIdentifier ?? value,
     actionNodes
   );
   const actionGroups = snapshot.groups.filter((group) => group.role === "bottomNavigation" || group.role === "topSwitcher");
@@ -406,30 +465,32 @@ export async function resolveActionLocator(
     containsText: containsText.length,
     classMatches: classMatches.length,
   });
-  const exactAccessibilityResolved = uniqueResolvedTarget(exactAccessibility, value, "accessibilityIdentifier");
+  const exactAccessibilityResolved = uniqueResolvedTarget(exactAccessibility, value, "accessibilityIdentifier", action);
   if (exactAccessibilityResolved) return exactAccessibilityResolved;
 
   const exactGroupLabelResolved = uniqueResolvedTarget(
-    exactGroupLabels.map((match) => ({ actionTargetOid: match.itemOid })),
+    exactGroupLabels.map((match) => ({ oid: match.itemOid, primaryOid: match.itemOid, actionTargetOid: match.itemOid })),
     value,
-    "group label"
+    "group label",
+    action
   );
   if (exactGroupLabelResolved) return exactGroupLabelResolved;
 
   const containsGroupLabelResolved = uniqueResolvedTarget(
-    containsGroupLabels.map((match) => ({ actionTargetOid: match.itemOid })),
+    containsGroupLabels.map((match) => ({ oid: match.itemOid, primaryOid: match.itemOid, actionTargetOid: match.itemOid })),
     value,
-    "group label contains"
+    "group label contains",
+    action
   );
   if (containsGroupLabelResolved) return containsGroupLabelResolved;
 
-  const exactTextResolved = uniqueResolvedTarget(exactText, value, "visible text");
+  const exactTextResolved = uniqueResolvedTarget(exactText, value, "visible text", action);
   if (exactTextResolved) return exactTextResolved;
 
-  const classResolved = uniqueResolvedTarget(classMatches, value, "class name");
+  const classResolved = uniqueResolvedTarget(classMatches, value, "class name", action);
   if (classResolved) return classResolved;
 
-  const containsResolved = uniqueResolvedTarget(containsText, value, "text contains");
+  const containsResolved = uniqueResolvedTarget(containsText, value, "text contains", action);
   if (containsResolved) return containsResolved;
 
   const fallbackQueryNodes = await uiQueryWithPlainLocator(value, session, exec);
@@ -457,6 +518,15 @@ export async function resolveActionLocator(
     throw new Error(
       `Locator '${value}' matched ${fallbackResolvedTargets.length} targets. Refine the plain text label or accessibility identifier.`
     );
+  }
+
+  if (explicitAccessibilityIdentifier) {
+    return {
+      input: value,
+      resolvedTarget: value,
+      matchedBy: "legacy locator",
+      candidateCount: 1,
+    };
   }
 
   throw new Error(`Locator '${value}' matched no targets.`);

@@ -77,13 +77,47 @@ describe("project memory auto persistence", () => {
     fs.mkdirSync(path.join(project, ".git"));
 
     noteSuccessfulTool("ui_scan", {}, {
-      sessions: [{ bundleId: "com.example.app", port: 47175, session: "com.example.app@47175" }],
+      sessions: [{
+        bundleId: "com.example.app",
+        port: 47175,
+        session: "com.example.app@47175",
+        deviceType: "device",
+        deviceName: "iPhone",
+        deviceIdentifier: "UDID-1",
+      }],
       message: "ok",
     }, project);
 
     const configPath = path.join(project, ".viewglassmcp", "config.yaml");
     expect(fs.existsSync(configPath)).toBe(true);
-    expect(fs.readFileSync(configPath, "utf8")).toContain('bundleId: "com.example.app"');
+    const config = fs.readFileSync(configPath, "utf8");
+    expect(config).toContain('bundleId: "com.example.app"');
+    expect(config).toContain('session: "com.example.app@47175"');
+    expect(config).toContain("port: 47175");
+    expect(config).toContain('deviceType: "device"');
+    expect(config).toContain('deviceName: "iPhone"');
+    expect(config).toContain('deviceIdentifier: "UDID-1"');
+  });
+
+  it("auto-persists full target selectors from ui_connect result", () => {
+    const project = fs.mkdtempSync(path.join(os.tmpdir(), "viewglass-connect-memory-"));
+    fs.mkdirSync(path.join(project, ".git"));
+
+    noteSuccessfulTool("ui_connect", {}, {
+      bundleId: "com.example.app",
+      session: "com.example.app@47175",
+      port: 47175,
+      deviceType: "device",
+      deviceName: "iPhone",
+      deviceIdentifier: "UDID-1",
+    }, project);
+
+    const configPath = path.join(project, ".viewglassmcp", "config.yaml");
+    const config = fs.readFileSync(configPath, "utf8");
+    expect(config).toContain('bundleId: "com.example.app"');
+    expect(config).toContain('session: "com.example.app@47175"');
+    expect(config).toContain("port: 47175");
+    expect(config).toContain('deviceIdentifier: "UDID-1"');
   });
 
   it("auto-appends a recipe draft after a successful flow confirmation", () => {

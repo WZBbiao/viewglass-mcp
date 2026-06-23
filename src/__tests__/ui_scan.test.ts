@@ -16,13 +16,23 @@ describe("uiScan", () => {
     const project = fs.mkdtempSync(path.join(os.tmpdir(), "viewglass-ui-scan-"));
     fs.mkdirSync(path.join(project, ".git"));
 
-    const exec = makeExec([{ bundleIdentifier: "com.example.App", port: 47164, deviceType: "device" }]);
+    const exec = makeExec([{
+      bundleIdentifier: "com.example.App",
+      port: 47164,
+      deviceType: "device",
+      deviceName: "iPhone",
+      deviceIdentifier: "UDID-1",
+    }]);
     await uiScan(exec, project);
 
     const configPath = path.join(project, ".viewglassmcp", "config.yaml");
     expect(fs.existsSync(configPath)).toBe(true);
     expect(fs.readFileSync(configPath, "utf8")).toContain('bundleId: "com.example.App"');
+    expect(fs.readFileSync(configPath, "utf8")).toContain('session: "com.example.App@47164"');
+    expect(fs.readFileSync(configPath, "utf8")).toContain("port: 47164");
     expect(fs.readFileSync(configPath, "utf8")).toContain('deviceType: "device"');
+    expect(fs.readFileSync(configPath, "utf8")).toContain('deviceName: "iPhone"');
+    expect(fs.readFileSync(configPath, "utf8")).toContain('deviceIdentifier: "UDID-1"');
   });
 
   it("returns sessions with bundleId, port, session string, and device metadata", async () => {

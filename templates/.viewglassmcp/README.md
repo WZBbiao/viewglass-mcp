@@ -7,12 +7,12 @@ This directory is maintained by the agent, not by the runtime.
 Purpose:
 
 - preserve successful UI interaction knowledge inside the project
-- speed up repeated flows without hard-coding fragile runtime OIDs
+- speed up repeated flows without depending on fragile runtime OIDs
 - keep reusable navigation and target-finding knowledge reviewable in git
 
 Rules:
 
-1. Do not store runtime `oid` as the long-term identity of a target.
+1. Prefer stable locator signals. `oid` may be stored only as `lastKnownOid` cache metadata.
 2. Prefer multi-signal target descriptions:
    - `controllerHints`
    - `groupRole`
@@ -20,9 +20,10 @@ Rules:
    - `accessibilityIdAny`
    - `classHints`
    - `areaHint`
-3. Every recipe must include a success condition.
-4. Update a recipe only after a task succeeds on a live app.
-5. If a recipe fails repeatedly, revise or remove it.
+3. If source is available and a key target lacks a stable locator, add an `accessibilityIdentifier` before relying on text/class/OID.
+4. Every recipe must include a success condition.
+5. Update a recipe only after a task succeeds on a live app.
+6. If a recipe fails repeatedly, revise or remove it.
 
 Recommended files:
 
@@ -31,7 +32,11 @@ Recommended files:
   Agents should add project-specific recipes only after a real successful run in
   the current project.
 - `config.yaml`
-  Project-local Viewglass defaults such as the target app bundle identifier.
+  Project-local Viewglass defaults such as the target app bundle identifier and
+  optional session selectors (`deviceIdentifier`, `deviceName`, `deviceType`,
+  `session`, `port`) for disambiguating multiple devices or simulators running
+  the same app. Treat `session` and `port` as last-known runtime hints because
+  they can change after relaunch.
 - `feedback.jsonl`
   Agent-authored feedback records for blocked flows, inefficient tool loops,
   screenshot/input/waiting bad cases, and useful improvement ideas. The

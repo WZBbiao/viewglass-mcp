@@ -56,6 +56,9 @@ describe("uiSetAttr", () => {
     ]);
     expect(result).toEqual({
       locator: "primary_text_field",
+      resolvedOid: "5678",
+      matchedBy: "query fallback",
+      candidateCount: 1,
       attr: "alpha",
       value: "0.8",
       ok: true,

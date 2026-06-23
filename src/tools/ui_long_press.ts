@@ -14,6 +14,9 @@ export interface UILongPressInput {
 
 export interface UILongPressResult {
   target: string;
+  resolvedOid: string;
+  matchedBy: string;
+  candidateCount: number;
   ok: true;
 }
 
@@ -33,5 +36,11 @@ export async function uiLongPress(
   const session = await resolveSession(input.session, exec);
   const resolved = await resolveUniqueNodeLocator(input.target, session, exec);
   await runCLI(["long-press", resolved.resolvedTarget, "--json"], { session, exec, timeoutMs: MUTATION_TIMEOUT_MS });
-  return { target: input.target, ok: true };
+  return {
+    target: input.target,
+    resolvedOid: resolved.resolvedTarget,
+    matchedBy: resolved.matchedBy,
+    candidateCount: resolved.candidateCount,
+    ok: true,
+  };
 }

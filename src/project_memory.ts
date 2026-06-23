@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { UIScanResult } from "./tools/ui_scan.js";
 import type { UISnapshotOutput } from "./tools/ui_snapshot.js";
-import { saveProjectBundleId } from "./project_config.js";
+import { saveProjectBundleId, saveProjectSessionDefaults } from "./project_config.js";
 
 const FLOW_GAP_MS = 10 * 60 * 1000;
 const MAX_VISIBLE_TEXT = 6;
@@ -303,9 +303,20 @@ export function noteSuccessfulTool(
 
   if (name === "ui_connect") {
     const bundleId = (parsed as { bundleId?: unknown }).bundleId;
+    const session = (parsed as { session?: unknown }).session;
+    const port = (parsed as { port?: unknown }).port;
     const deviceType = (parsed as { deviceType?: unknown }).deviceType;
+    const deviceName = (parsed as { deviceName?: unknown }).deviceName;
+    const deviceIdentifier = (parsed as { deviceIdentifier?: unknown }).deviceIdentifier;
     if (typeof bundleId === "string") {
-      saveProjectBundleId(bundleId, projectCwd, parseDeviceType(deviceType));
+      saveProjectSessionDefaults({
+        bundleId,
+        ...(typeof session === "string" ? { session } : {}),
+        ...(typeof port === "number" ? { port } : {}),
+        ...(parseDeviceType(deviceType) ? { deviceType: parseDeviceType(deviceType) } : {}),
+        ...(typeof deviceName === "string" ? { deviceName } : {}),
+        ...(typeof deviceIdentifier === "string" ? { deviceIdentifier } : {}),
+      }, projectCwd);
     }
     return;
   }
@@ -313,7 +324,14 @@ export function noteSuccessfulTool(
   if (name === "ui_scan") {
     const sessions = (parsed as UIScanResult).sessions;
     if (Array.isArray(sessions) && sessions.length === 1 && typeof sessions[0]?.bundleId === "string") {
-      saveProjectBundleId(sessions[0].bundleId, projectCwd, sessions[0].deviceType);
+      saveProjectSessionDefaults({
+        bundleId: sessions[0].bundleId,
+        session: sessions[0].session,
+        port: sessions[0].port,
+        deviceType: sessions[0].deviceType,
+        deviceName: sessions[0].deviceName,
+        deviceIdentifier: sessions[0].deviceIdentifier,
+      }, projectCwd);
     }
     return;
   }
@@ -322,7 +340,14 @@ export function noteSuccessfulTool(
     const snapshot = parsed as UISnapshotOutput;
     const session = snapshot.app?.session;
     if (typeof snapshot.app?.bundleIdentifier === "string") {
-      saveProjectBundleId(snapshot.app.bundleIdentifier, projectCwd, parseDeviceType(snapshot.app.deviceType));
+      const parsedPort = typeof session === "string" ? Number(session.split("@").pop()) : undefined;
+      saveProjectSessionDefaults({
+        bundleId: snapshot.app.bundleIdentifier,
+        ...(typeof session === "string" ? { session } : {}),
+        ...(Number.isInteger(parsedPort) ? { port: parsedPort } : {}),
+        ...(parseDeviceType(snapshot.app.deviceType) ? { deviceType: parseDeviceType(snapshot.app.deviceType) } : {}),
+        ...(typeof snapshot.app.deviceName === "string" ? { deviceName: snapshot.app.deviceName } : {}),
+      }, projectCwd);
     }
     if (typeof session === "string" && session.trim()) {
       latestSnapshotBySession.set(session, snapshot);

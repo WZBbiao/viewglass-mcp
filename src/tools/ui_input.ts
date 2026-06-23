@@ -1,9 +1,12 @@
 import { runCLI, resolveSession } from "../runner.js";
 import type { ExecFn } from "../runner.js";
+import { resolveActionLocator } from "./locator.js";
 
 export interface UIInputInput {
-  /** Executable node oid from ui_snapshot. Must resolve to a UITextField or UITextView. */
-  oid: string;
+  /** Stable locator such as an accessibilityIdentifier. Preferred for replay. */
+  locator?: string;
+  /** Runtime OID from ui_snapshot. Must resolve to a UITextField or UITextView. */
+  oid?: string;
   /** Text to type into the field. */
   text: string;
   /** Viewglass session in bundleId@port format. Auto-detected if omitted. */
@@ -13,6 +16,12 @@ export interface UIInputInput {
 export interface UIInputResult {
   /** Executed target oid. */
   oid: string;
+  /** Stable locator used, when provided. */
+  locator?: string;
+  /** How the locator was matched. */
+  matchedBy?: string;
+  /** Number of candidates considered for the locator. */
+  candidateCount?: number;
   /** Text that was entered. */
   text: string;
   /** true on success. */
@@ -31,15 +40,25 @@ export async function uiInput(
   input: UIInputInput,
   exec?: ExecFn
 ): Promise<UIInputResult> {
-  if (!input.oid || String(input.oid).trim() === "") {
-    throw new Error("ui_input requires an exact oid from ui_snapshot. First inspect ui_snapshot.groups/nodes, then pass that oid to ui_input.");
+  if (!input.locator && !input.oid) {
+    throw new Error("ui_input requires either 'locator' or 'oid'. Prefer locator for reusable flows.");
   }
   const session = await resolveSession(input.session, exec);
-  const cliArgs = ["input", input.oid, "--text", input.text, "--json"];
+  const resolved = input.locator
+    ? await resolveActionLocator(input.locator, session, "input", exec)
+    : undefined;
+  const target = resolved?.resolvedTarget ?? input.oid!;
+  const cliArgs = ["input", target, "--text", input.text, "--json"];
   await runCLI(cliArgs, { session, exec });
-  return {
-    oid: input.oid,
+  const output: UIInputResult = {
+    oid: target,
     text: input.text,
     ok: true,
   };
+  if (input.locator) output.locator = input.locator;
+  if (resolved) {
+    output.matchedBy = resolved.matchedBy;
+    output.candidateCount = resolved.candidateCount;
+  }
+  return output;
 }

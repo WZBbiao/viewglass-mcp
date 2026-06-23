@@ -2,7 +2,14 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, it, expect, vi } from "vitest";
-import { detectSession, resolveSession, parseJSON, runCLI, ViewglassCLIError } from "../runner.js";
+import {
+  detectSession,
+  getViewglassBinaryDiagnostics,
+  resolveSession,
+  parseJSON,
+  runCLI,
+  ViewglassCLIError,
+} from "../runner.js";
 import type { ExecFn, RunResult } from "../runner.js";
 
 function makeExec(result: Partial<RunResult> | Error): ExecFn {
@@ -29,13 +36,13 @@ describe("detectSession", () => {
     });
   });
 
-  it("prefers physical devices when auto-detecting without a deviceType override", async () => {
+  it("returns undefined when multiple sessions exist without config selectors", async () => {
     const exec = makeExec({ stdout: JSON.stringify([
       { bundleIdentifier: "com.test.App", deviceType: "simulator", port: 47164 },
       { bundleIdentifier: "com.test.App", deviceType: "device", port: 47175 },
     ]) });
     await withTempProject(async (project) => {
-      expect(await detectSession(exec, project)).toBe("com.test.App@47175");
+      expect(await detectSession(exec, project)).toBeUndefined();
     });
   });
 
@@ -82,6 +89,40 @@ describe("detectSession", () => {
     expect(await detectSession(exec, project)).toBe("com.target.app@47165");
     fs.rmSync(tempRoot, { recursive: true, force: true });
   });
+
+  it("uses configured deviceIdentifier before stale last-known session", async () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "viewglass-config-"));
+    const project = path.join(tempRoot, "project");
+    fs.mkdirSync(path.join(project, ".viewglassmcp"), { recursive: true });
+    fs.writeFileSync(
+      path.join(project, ".viewglassmcp", "config.yaml"),
+      'schemaVersion: 1\nsessionDefaults:\n  bundleId: "com.target.app"\n  session: "com.target.app@49999"\n  port: 49999\n  deviceIdentifier: "UDID-DEVICE"\n',
+      'utf8'
+    );
+    const exec = makeExec({ stdout: JSON.stringify([
+      { bundleIdentifier: "com.target.app", deviceType: "simulator", port: 47164 },
+      { bundleIdentifier: "com.target.app", deviceType: "device", deviceIdentifier: "UDID-DEVICE", port: 47175 },
+    ]) });
+    expect(await detectSession(exec, project)).toBe("com.target.app@47175");
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  });
+
+  it("returns undefined when configured last-known session is stale and target remains ambiguous", async () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "viewglass-config-"));
+    const project = path.join(tempRoot, "project");
+    fs.mkdirSync(path.join(project, ".viewglassmcp"), { recursive: true });
+    fs.writeFileSync(
+      path.join(project, ".viewglassmcp", "config.yaml"),
+      'schemaVersion: 1\nsessionDefaults:\n  bundleId: "com.target.app"\n  session: "com.target.app@49999"\n  port: 49999\n',
+      'utf8'
+    );
+    const exec = makeExec({ stdout: JSON.stringify([
+      { bundleIdentifier: "com.target.app", deviceType: "simulator", port: 47164 },
+      { bundleIdentifier: "com.target.app", deviceType: "device", port: 47175 },
+    ]) });
+    expect(await detectSession(exec, project)).toBeUndefined();
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  });
 });
 
 describe("resolveSession", () => {
@@ -101,7 +142,17 @@ describe("resolveSession", () => {
   it("throws when no session and no app running", async () => {
     const exec = makeExec({ stdout: "[]" });
     await withTempProject(async (project) => {
-      await expect(resolveSession(undefined, exec, project)).rejects.toThrow("No Viewglass session");
+      await expect(resolveSession(undefined, exec, project)).rejects.toThrow("No unambiguous Viewglass session");
+    });
+  });
+
+  it("throws when no session and multiple sessions are ambiguous", async () => {
+    const exec = makeExec({ stdout: JSON.stringify([
+      { bundleIdentifier: "com.one.App", port: 1111 },
+      { bundleIdentifier: "com.two.App", port: 2222 },
+    ]) });
+    await withTempProject(async (project) => {
+      await expect(resolveSession(undefined, exec, project)).rejects.toThrow("deviceIdentifier");
     });
   });
 });
@@ -115,6 +166,17 @@ describe("parseJSON", () => {
     expect(() => parseJSON("not json", "ui_snapshot")).toThrow(
       "Failed to parse JSON from 'ui_snapshot'"
     );
+  });
+});
+
+describe("viewglass binary diagnostics", () => {
+  it("includes the resolved binary and local development fallback paths", () => {
+    const diagnostics = getViewglassBinaryDiagnostics();
+
+    expect(diagnostics).toContain("Resolved binary:");
+    expect(diagnostics).toContain("VIEWGLASS_BIN");
+    expect(diagnostics).toContain("lookin/.build/debug/viewglass");
+    expect(diagnostics).toContain("swift build");
   });
 });
 
@@ -156,6 +218,28 @@ describe("runCLI", () => {
     expect(exec.mock.calls[0][1]).toEqual(["hierarchy", "--json", "--session", "com.test.App@47164"]);
     expect(exec.mock.calls[1][1]).toEqual(["apps", "list", "--json"]);
     expect(exec.mock.calls[2][1]).toEqual(["hierarchy", "--json", "--session", "com.test.App@47175"]);
+  });
+
+  it("does not retry stale sessions when same-bundle recovery is ambiguous", async () => {
+    const staleError = Object.assign(new Error("Command failed"), {
+      stderr: "Session not connected",
+      code: 20,
+    });
+    const exec = vi.fn()
+      .mockRejectedValueOnce(staleError)
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          { bundleIdentifier: "com.test.App", deviceType: "simulator", port: 47164 },
+          { bundleIdentifier: "com.test.App", deviceType: "device", port: 47175 },
+        ]),
+        stderr: "",
+      }) as unknown as ReturnType<typeof vi.fn> & ExecFn;
+
+    await withTempProject(async (project) => {
+      await expect(runCLI(["hierarchy", "--json"], { session: "com.test.App@49999", exec, projectCwd: project }))
+        .rejects.toThrow("Session not connected");
+      expect(exec).toHaveBeenCalledTimes(2);
+    });
   });
 
   it("re-detects and retries once after a true-device USB read timeout", async () => {

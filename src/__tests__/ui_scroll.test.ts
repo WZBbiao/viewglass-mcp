@@ -4,10 +4,29 @@ import type { ExecFn } from "../runner.js";
 
 function makeExec(): ExecFn {
   return vi.fn().mockImplementation(async (_bin: string, args: string[]) => {
+    if (args[0] === "query") {
+      if (args[1] === "#long_feed_scroll") {
+        return { stdout: JSON.stringify([{ oid: 88, primaryOid: 88 }]), stderr: "" };
+      }
+      return { stdout: "[]", stderr: "" };
+    }
     if (args[0] === "swipe") {
       return { stdout: JSON.stringify({ targetClass: "UITableView" }), stderr: "" };
     }
     return { stdout: "", stderr: "" };
+  });
+
+  it("resolves locator before scrolling", async () => {
+    const exec = makeExec() as ReturnType<typeof vi.fn>;
+    const result = await uiScroll({ locator: "long_feed_scroll", direction: "down", session: "com.test@1234" }, exec);
+    const swipeCall = (exec.mock.calls as [string, string[]][]).find((c) => c[1][0] === "swipe")!;
+    expect(swipeCall[1]).toContain("88");
+    expect(result).toEqual(expect.objectContaining({
+      oid: "88",
+      locator: "long_feed_scroll",
+      matchedBy: "query fallback",
+      candidateCount: 1,
+    }));
   });
 }
 
@@ -119,10 +138,10 @@ describe("uiScroll", () => {
     expect(result.targetClass).toBe("UITableView");
   });
 
-  it("rejects missing oid", async () => {
+  it("rejects missing target", async () => {
     const exec = makeExec();
-    await expect(uiScroll({ oid: "" as string, direction: "down", session: "com.test@1234" }, exec)).rejects.toThrow(
-      "ui_scroll requires an exact oid from ui_snapshot"
+    await expect(uiScroll({ direction: "down", session: "com.test@1234" }, exec)).rejects.toThrow(
+      "ui_scroll requires either 'locator' or 'oid'"
     );
   });
 });

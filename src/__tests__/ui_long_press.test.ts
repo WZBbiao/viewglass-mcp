@@ -39,5 +39,8 @@ describe("uiLongPress", () => {
     const result = await uiLongPress({ target: "#menu-trigger", session: "com.test@1234" }, exec);
     expect(result.ok).toBe(true);
     expect(result.target).toBe("#menu-trigger");
+    expect(result.resolvedOid).toBe("#menu-trigger");
+    expect(result.matchedBy).toBe("legacy locator");
+    expect(result.candidateCount).toBe(1);
   });
 });
