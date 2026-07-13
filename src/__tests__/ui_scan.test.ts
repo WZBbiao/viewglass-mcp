@@ -12,7 +12,7 @@ function makeExec(apps?: object[]): ExecFn {
 }
 
 describe("uiScan", () => {
-  it("auto-persists bundleId when exactly one session is found", async () => {
+  it("does not persist a target when exactly one session is found", async () => {
     const project = fs.mkdtempSync(path.join(os.tmpdir(), "viewglass-ui-scan-"));
     fs.mkdirSync(path.join(project, ".git"));
 
@@ -23,16 +23,9 @@ describe("uiScan", () => {
       deviceName: "iPhone",
       deviceIdentifier: "UDID-1",
     }]);
-    await uiScan(exec, project);
+    await uiScan(exec);
 
-    const configPath = path.join(project, ".viewglassmcp", "config.yaml");
-    expect(fs.existsSync(configPath)).toBe(true);
-    expect(fs.readFileSync(configPath, "utf8")).toContain('bundleId: "com.example.App"');
-    expect(fs.readFileSync(configPath, "utf8")).toContain('session: "com.example.App@47164"');
-    expect(fs.readFileSync(configPath, "utf8")).toContain("port: 47164");
-    expect(fs.readFileSync(configPath, "utf8")).toContain('deviceType: "device"');
-    expect(fs.readFileSync(configPath, "utf8")).toContain('deviceName: "iPhone"');
-    expect(fs.readFileSync(configPath, "utf8")).toContain('deviceIdentifier: "UDID-1"');
+    expect(fs.existsSync(path.join(project, ".viewglassmcp"))).toBe(false);
   });
 
   it("returns sessions with bundleId, port, session string, and device metadata", async () => {

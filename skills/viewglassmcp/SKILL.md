@@ -17,6 +17,9 @@ Use Viewglass MCP tools to inspect and interact with a live iOS app.
 - Use `mode=fullIndex` only when the compact action index is insufficient.
 - Do not try to guess sessions manually. If `.viewglassmcp/config.yaml` already has a `bundleId` plus stable selectors, let ViewglassMCP resolve the session automatically.
 - If `ui_connect` reports multiple sessions for the same bundle, choose using `session`, `port`, `deviceIdentifier`, `deviceName`, or `deviceType`; prefer `deviceIdentifier`/`deviceName`/`deviceType` over last-known `session`/`port`.
+- A successful `ui_connect` exclusively leases that physical device or simulator to the current MCP agent. If another agent already owns it, do not retry or attempt to take it over; choose one of the alternative instances listed in the error using its stable device selector.
+- The lease is device-level, not app-level: two agents cannot control different apps on the same device at the same time. It is released when the owning MCP process exits and recovered automatically after a crash.
+- ViewglassMCP serializes same-agent calls per device. Avoid intentionally launching large parallel batches; a bounded queue rejects overload with guidance to serialize calls.
 
 ## Step 2: Execute With Stable Locator First
 

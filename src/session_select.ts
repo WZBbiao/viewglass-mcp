@@ -21,6 +21,17 @@ export function sessionOf(app: RunningApp): string {
   return `${app.bundleIdentifier}@${app.port}`;
 }
 
+export function deviceKeyOf(app: RunningApp): string {
+  const identifier = app.deviceIdentifier?.trim().toLowerCase();
+  if (identifier) return `id:${identifier}`;
+
+  const type = app.deviceType?.trim().toLowerCase() || "unknown";
+  const name = app.deviceName?.trim().toLowerCase() || "unnamed";
+  // Missing identifiers intentionally over-lock same-named devices rather than
+  // allow two agents to manipulate one device concurrently.
+  return `fallback:${type}:${name}`;
+}
+
 export function parseSession(value?: string): { bundleId: string; port: number } | undefined {
   if (!value) return undefined;
   const trimmed = value.trim();

@@ -16,7 +16,15 @@
     "url": "https://github.com/WZBbiao/viewglass-mcp.git"
   },
   "homepage": "https://github.com/WZBbiao/viewglass-mcp",
-  "keywords": ["mcp", "ios", "ui-automation", "viewglass", "ai", "claude", "inspector"],
+  "keywords": [
+    "mcp",
+    "ios",
+    "ui-automation",
+    "viewglass",
+    "ai",
+    "claude",
+    "inspector"
+  ],
   "files": [
     "dist/",
     "bin/",
@@ -31,13 +39,17 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npm run build && npx tsx src/__tests__/e2e.ts",
+    "test:lease-race": "npm run build && node scripts/test-device-lease-race.mjs",
+    "test:live-contention": "npm run build && node scripts/test-live-device-contention.mjs",
     "export:flow": "node scripts/export-flow-from-log.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.1"
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "proper-lockfile": "^4.1.2"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@types/proper-lockfile": "^4.1.4",
     "tsx": "^4.19.0",
     "typescript": "^5.8.0",
     "vitest": "^3.0.0"

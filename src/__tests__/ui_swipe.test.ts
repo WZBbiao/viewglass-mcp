@@ -23,7 +23,26 @@ function makeExec(): ExecFn {
         stderr: "",
       };
     }
-    return { stdout: "", stderr: "" };
+    if (args[0] === "swipe") {
+      return {
+        stdout: JSON.stringify({
+          action: "swipe",
+          targetClass: "UIView",
+          mode: "semantic",
+          strategyUsed: "coordinateSemanticSwipe",
+          detail: "Triggered coordinate semantic swipe",
+          fallbackReason: "UIView is not a UIScrollView subclass",
+          pointX: 100,
+          pointY: 200,
+          endPointX: 100,
+          endPointY: 320,
+          hitOid: 77,
+          hitClass: "UIPanCard",
+        }),
+        stderr: "",
+      };
+    }
+    return { stdout: "{}", stderr: "" };
   });
 }
 
@@ -80,5 +99,66 @@ describe("uiSwipe", () => {
     expect(result.direction).toBe("left");
     expect(result.distance).toBe(200);
     expect(result.ok).toBe(true);
+    expect(result.strategyUsed).toBe("coordinateSemanticSwipe");
+    expect(result.fallbackReason).toContain("UIScrollView");
+    expect(result.point).toEqual({ x: 100, y: 200 });
+    expect(result.endPoint).toEqual({ x: 100, y: 320 });
+    expect(result.hitOid).toBe("77");
+    expect(result.hitClass).toBe("UIPanCard");
+  });
+
+  it("retries once when a coordinate semantic swipe pan recognizer is not ready yet", async () => {
+    let swipeAttempts = 0;
+    const exec: ExecFn = vi.fn().mockImplementation(async (_bin: string, args: string[]) => {
+      if (args[0] === "query" && args[1] === "#pager") {
+        return { stdout: JSON.stringify([{ oid: 66, primaryOid: 66 }]), stderr: "" };
+      }
+      if (args[0] === "hierarchy") {
+        return {
+          stdout: JSON.stringify({
+            appInfo: { appName: "FixtureApp", bundleIdentifier: "com.test", serverVersion: "0.1.0" },
+            fetchedAt: "2026-04-15T10:00:00Z",
+            screenScale: 3,
+            screenSize: { x: 0, y: 0, width: 390, height: 844 },
+            snapshotId: "snap-swipe",
+            windows: [],
+          }),
+          stderr: "",
+        };
+      }
+      if (args[0] === "swipe") {
+        swipeAttempts += 1;
+        if (swipeAttempts === 1) {
+          throw {
+            code: 72,
+            stdout: JSON.stringify({
+              code: 72,
+              error: true,
+              message: "Protocol error: Didn't find an enabled UIPanGestureRecognizer for coordinate semantic swipe starting on UIView.",
+            }),
+            stderr: "",
+          };
+        }
+        return {
+          stdout: JSON.stringify({
+            action: "swipe",
+            strategyUsed: "coordinateSemanticSwipe",
+            pointX: 100,
+            pointY: 200,
+            endPointX: 100,
+            endPointY: 320,
+          }),
+          stderr: "",
+        };
+      }
+      return { stdout: "{}", stderr: "" };
+    });
+
+    const result = await uiSwipe({ target: "#pager", direction: "down", session: "com.test@1234" }, exec);
+    expect(result.ok).toBe(true);
+    expect(result.strategyUsed).toBe("coordinateSemanticSwipe");
+    expect(swipeAttempts).toBe(2);
+    const swipeCalls = (exec as ReturnType<typeof vi.fn>).mock.calls.filter((c) => c[1][0] === "swipe");
+    expect(swipeCalls).toHaveLength(2);
   });
 });

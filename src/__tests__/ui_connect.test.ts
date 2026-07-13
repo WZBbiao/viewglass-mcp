@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, it, expect, vi } from "vitest";
 import { uiConnect } from "../tools/ui_connect.js";
+import { DeviceAccessCoordinator } from "../device_access.js";
 import type { ExecFn } from "../runner.js";
 
 type AppFixture = {
@@ -74,6 +75,29 @@ async function withTempProject<T>(fn: (project: string) => Promise<T> | T): Prom
 }
 
 describe("uiConnect", () => {
+  it("does not persist a busy device as the project default", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "viewglass-connect-busy-"));
+    const project = path.join(root, "project");
+    const leaseDirectory = path.join(root, "leases");
+    const first = new DeviceAccessCoordinator({ leaseDirectory, installLifecycleHooks: false });
+    const second = new DeviceAccessCoordinator({ leaseDirectory, installLifecycleHooks: false });
+    const app = SAME_BUNDLE_APPS[1];
+    try {
+      await first.runForApp(app, SAME_BUNDLE_APPS, project, async () => undefined);
+      await expect(uiConnect(
+        { bundleId: "com.same.App", deviceIdentifier: "UDID-DEVICE" },
+        makeExec(SAME_BUNDLE_APPS),
+        project,
+        second
+      )).rejects.toThrow("already connected");
+      expect(fs.existsSync(path.join(project, ".viewglassmcp", "config.yaml"))).toBe(false);
+    } finally {
+      await first.releaseAll();
+      await second.releaseAll();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("returns session for exact bundleId match", async () => {
     const exec = makeExec(APPS);
     await withTempProject(async (project) => {

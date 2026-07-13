@@ -24,6 +24,7 @@ Rules:
 4. Every recipe must include a success condition.
 5. Update a recipe only after a task succeeds on a live app.
 6. If a recipe fails repeatedly, revise or remove it.
+7. Treat a successful `ui_connect` as an exclusive device lease. If another agent owns the target, use a listed alternative simulator or physical device instead of retrying or taking it over.
 
 Recommended files:
 

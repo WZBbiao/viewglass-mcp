@@ -1,7 +1,9 @@
-import { VIEWGLASS_BIN, getViewglassBinaryDiagnostics, parseJSON } from "../runner.js";
+import { getViewglassBinaryDiagnostics } from "../runner.js";
 import { loadProjectConfig, saveProjectSessionDefaults } from "../project_config.js";
 import type { ExecFn } from "../runner.js";
 import { defaultExec } from "../runner.js";
+import { deviceAccess, DeviceAccessCoordinator } from "../device_access.js";
+import type { DeviceLeaseSummary } from "../device_access.js";
 import {
   applySessionSelectors,
   compactSelectors,
@@ -32,7 +34,7 @@ export interface UIConnectInput {
   deviceType?: DeviceType;
   /** Exact simulator/device display name as reported by viewglass apps list. */
   deviceName?: string;
-  /** Exact physical-device UDID as reported by viewglass apps list. */
+  /** Exact simulator/device identifier (UDID) as reported by viewglass apps list. */
   deviceIdentifier?: string;
 }
 
@@ -45,9 +47,8 @@ export interface UIConnectResult {
   deviceName?: string;
   deviceIdentifier?: string;
   serverVersion?: string;
+  lease: DeviceLeaseSummary;
 }
-
-const APPS_LIST_TIMEOUT_MS = 30_000;
 
 /**
  * Find and return the session for a specific iOS app by bundle ID.
@@ -57,16 +58,14 @@ const APPS_LIST_TIMEOUT_MS = 30_000;
 export async function uiConnect(
   input: UIConnectInput,
   exec?: ExecFn,
-  projectCwd: string = process.cwd()
+  projectCwd: string = process.cwd(),
+  access: DeviceAccessCoordinator = deviceAccess
 ): Promise<UIConnectResult> {
   const fn = exec ?? defaultExec;
 
   let apps: RunningApp[] = [];
   try {
-    const { stdout } = await fn(VIEWGLASS_BIN, ["apps", "list", "--json"], {
-      timeout: APPS_LIST_TIMEOUT_MS,
-    });
-    apps = parseJSON<typeof apps>(stdout, "ui_connect");
+    apps = await access.listRunningApps(fn, true);
   } catch (error) {
     throw new Error(
       "Failed to list running apps. Viewglass CLI is unavailable or failed before returning running apps.\n" +
@@ -127,24 +126,27 @@ export async function uiConnect(
     );
   }
 
-  saveProjectSessionDefaults({
-    bundleId: match.bundleIdentifier,
-    session: sessionOf(match),
-    port: match.port,
-    deviceType: match.deviceType === "device" || match.deviceType === "simulator" ? match.deviceType : undefined,
-    deviceName: match.deviceName,
-    deviceIdentifier: match.deviceIdentifier,
-  }, projectCwd);
+  return access.runForApp(match, apps, projectCwd, async (lease) => {
+    saveProjectSessionDefaults({
+      bundleId: match.bundleIdentifier,
+      session: sessionOf(match),
+      port: match.port,
+      deviceType: match.deviceType === "device" || match.deviceType === "simulator" ? match.deviceType : undefined,
+      deviceName: match.deviceName,
+      deviceIdentifier: match.deviceIdentifier,
+    }, projectCwd);
 
-  return {
-    session: sessionOf(match),
-    bundleId: match.bundleIdentifier,
-    port: match.port,
-    deviceType: match.deviceType === "device" || match.deviceType === "simulator" ? match.deviceType : undefined,
-    deviceName: match.deviceName,
-    deviceIdentifier: match.deviceIdentifier,
-    serverVersion: match.serverVersion,
-  };
+    return {
+      session: sessionOf(match),
+      bundleId: match.bundleIdentifier,
+      port: match.port,
+      deviceType: match.deviceType === "device" || match.deviceType === "simulator" ? match.deviceType : undefined,
+      deviceName: match.deviceName,
+      deviceIdentifier: match.deviceIdentifier,
+      serverVersion: match.serverVersion,
+      lease,
+    };
+  });
 }
 
 function formatUnderlyingError(error: unknown): string {

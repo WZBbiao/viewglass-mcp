@@ -405,6 +405,15 @@ async function runE2E() {
   await new Promise((r) => setTimeout(r, 500));
 
   try {
+    console.log("\n[ ui_scan ]");
+
+    await test("lists the dedicated simulator without claiming it", async () => {
+      const data = await client.callToolJSON<{ sessions?: Array<{ deviceIdentifier?: string }> }>("ui_scan", {});
+      if (E2E_DEVICE_IDENTIFIER && !data.sessions?.some((item) => item.deviceIdentifier === E2E_DEVICE_IDENTIFIER)) {
+        throw new Error(`dedicated simulator missing from ui_scan: ${JSON.stringify(data.sessions)}`);
+      }
+    });
+
     // ─── ui_connect ────────────────────────────────────────────────────────
     console.log("\n[ ui_connect ]");
 
@@ -416,6 +425,7 @@ async function runE2E() {
         deviceType?: string;
         deviceName?: string;
         deviceIdentifier?: string;
+        lease?: { exclusive?: boolean; deviceKey?: string; ownerPid?: number };
       }>(
         "ui_connect", e2eConnectArgs()
       );
@@ -427,6 +437,9 @@ async function runE2E() {
       }
       if (E2E_DEVICE_IDENTIFIER && data.deviceIdentifier !== E2E_DEVICE_IDENTIFIER) {
         throw new Error(`unexpected deviceIdentifier: ${data.deviceIdentifier}`);
+      }
+      if (!data.lease?.exclusive || !data.lease.deviceKey || !data.lease.ownerPid) {
+        throw new Error(`exclusive device lease missing from ui_connect: ${JSON.stringify(data.lease)}`);
       }
       if (E2E_PORT !== undefined && data.port !== E2E_PORT) {
         throw new Error(`unexpected port: ${data.port}`);
@@ -550,6 +563,7 @@ async function runE2E() {
       if (!data.resolvedOid) throw new Error(`missing resolvedOid: ${JSON.stringify(data)}`);
       if (data.matchedBy !== "accessibilityIdentifier") throw new Error(`unexpected matchedBy: ${data.matchedBy}`);
       if (data.candidateCount !== 1) throw new Error(`unexpected candidateCount: ${data.candidateCount}`);
+      await tapBack(client);
     });
 
     await test("tap push_forms_screen by bare accessibility identifier resolves before action", async () => {
@@ -566,6 +580,9 @@ async function runE2E() {
     });
 
     await test("tap _UIButtonBarButton by OID still works as volatile fallback", async () => {
+      await resetToHome(client);
+      await client.callToolJSON("ui_tap", { locator: a11y("push_buttons_screen"), session: SESSION });
+      await waitForLocator(client, "_UIButtonBarButton");
       const oid = await resolveFirstOidByClass(client, "_UIButtonBarButton");
       const data = await client.callToolJSON<{ ok?: boolean; oid?: string }>(
         "ui_tap", { oid, session: SESSION }
@@ -623,6 +640,22 @@ async function runE2E() {
       if (text !== "Coordinate fallback fired") {
         throw new Error(`unexpected gesture status after coordinate fallback: ${text}`);
       }
+    });
+
+    await test("tap callback may remove its own view without crashing the app or connection", async () => {
+      const data = await client.callToolJSON<{ ok?: boolean }>(
+        "ui_tap", { locator: a11y("self_removing_tap_card"), session: SESSION }
+      );
+      if (!data.ok) throw new Error(`unexpected self-removing tap result: ${JSON.stringify(data)}`);
+      const gone = await client.callToolJSON<{ met?: boolean }>(
+        "ui_wait", { mode: "gone", locator: a11y("self_removing_tap_card"), timeout: 3, session: SESSION }
+      );
+      if (!gone.met) throw new Error("self-removing tap card is still present");
+      const attrs = await client.callToolJSON<Record<string, unknown>>(
+        "ui_attr_get", { locator: a11y("gesture_status"), attrs: ["text", "displayText"], session: SESSION }
+      );
+      const text = String(attrs.text ?? attrs.displayText ?? "");
+      if (text !== "Self-removing tap fired") throw new Error(`unexpected self-removing tap status: ${text}`);
     });
 
     // ─── ui_long_press ──────────────────────────────────────────────────────
@@ -833,6 +866,23 @@ async function runE2E() {
       if (data.locator !== a11y("push_buttons_screen")) throw new Error(`unexpected locator: ${data.locator}`);
     });
 
+    await test("parallel read APIs are serialized and all keep the session alive", async () => {
+      const [snapshot, attrs, screenshot] = await Promise.all([
+        client.callToolJSON<{ snapshot?: { snapshotId?: string } }>("ui_snapshot", { session: SESSION }),
+        client.callToolJSON<Record<string, unknown>>(
+          "ui_attr_get", { locator: a11y("push_buttons_screen"), attrs: ["frame"], session: SESSION }
+        ),
+        client.callToolJSON<{ path?: string }>("ui_screenshot", { session: SESSION }),
+      ]);
+      if (!snapshot.snapshot?.snapshotId) throw new Error("parallel snapshot did not complete");
+      if (!attrs.frame) throw new Error("parallel attr read did not complete");
+      if (!screenshot.path) throw new Error("parallel screenshot did not complete");
+      const alive = await client.callToolJSON<{ passed?: boolean }>(
+        "ui_assert", { mode: "visible", locator: a11y("home_buttons_stack"), session: SESSION }
+      );
+      if (!alive.passed) throw new Error("session did not survive parallel read APIs");
+    });
+
     // ─── ui_input (navigate to forms first) ────────────────────────────────
     console.log("\n[ ui_input ]");
     await resetToHome(client);
@@ -882,6 +932,49 @@ async function runE2E() {
         "ui_swipe", { target: a11y("long_feed_scroll"), direction: "up", session: SESSION }
       );
       if (!data.ok) throw new Error("expected ok:true");
+    });
+
+    await resetToHome(client);
+    await client.callToolJSON("ui_tap", { locator: a11y("push_gestures_screen"), session: SESSION });
+    await waitForLocator(client, a11y("pan_card"));
+
+    await test("swipe non-scroll pan card uses coordinate semantic swipe", async () => {
+      const data = await client.callToolJSON<{ ok?: boolean; strategyUsed?: string; point?: unknown; endPoint?: unknown }>(
+        "ui_swipe", { target: a11y("pan_card"), direction: "down", distance: 90, session: SESSION }
+      );
+      if (!data.ok) throw new Error("expected ok:true");
+      if (data.strategyUsed !== "coordinateSemanticSwipe") {
+        throw new Error(`expected coordinateSemanticSwipe, got ${JSON.stringify(data)}`);
+      }
+      if (!data.point || !data.endPoint) throw new Error(`missing coordinate details: ${JSON.stringify(data)}`);
+      const status = await client.callToolJSON<Record<string, unknown>>(
+        "ui_attr_get", { locator: a11y("gesture_status"), attrs: ["text", "displayText"], session: SESSION }
+      );
+      const text = String(status.text ?? status.displayText ?? "");
+      if (text !== "Pan down 90 fired") {
+        throw new Error(`pan translation was not applied exactly once: ${text}`);
+      }
+    });
+
+    await test("pan callback may remove its own view without resetting the connection", async () => {
+      await client.callToolJSON(
+        "ui_scroll", { locator: a11y("gesture_scroll"), direction: "down", distance: 500, session: SESSION }
+      );
+      const data = await client.callToolJSON<{ ok?: boolean; strategyUsed?: string }>(
+        "ui_swipe", { target: a11y("self_removing_pan_card"), direction: "down", distance: 80, session: SESSION }
+      );
+      if (!data.ok || data.strategyUsed !== "coordinateSemanticSwipe") {
+        throw new Error(`unexpected self-removing pan result: ${JSON.stringify(data)}`);
+      }
+      const gone = await client.callToolJSON<{ met?: boolean }>(
+        "ui_wait", { mode: "gone", locator: a11y("self_removing_pan_card"), timeout: 3, session: SESSION }
+      );
+      if (!gone.met) throw new Error("self-removing pan card is still present");
+      const attrs = await client.callToolJSON<Record<string, unknown>>(
+        "ui_attr_get", { locator: a11y("gesture_status"), attrs: ["text", "displayText"], session: SESSION }
+      );
+      const text = String(attrs.text ?? attrs.displayText ?? "");
+      if (text !== "Self-removing pan fired") throw new Error(`unexpected self-removing pan status: ${text}`);
     });
 
     // ─── ui_dismiss (show a modal sheet, then dismiss it) ───────────────────

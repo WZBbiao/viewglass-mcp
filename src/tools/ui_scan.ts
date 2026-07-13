@@ -1,5 +1,4 @@
 import { VIEWGLASS_BIN, parseJSON } from "../runner.js";
-import { saveProjectSessionDefaults } from "../project_config.js";
 import type { ExecFn } from "../runner.js";
 import { defaultExec } from "../runner.js";
 
@@ -119,8 +118,7 @@ const SETUP_GUIDE: ViewglassSetupGuide = {
  *       then ask them to build & run the app, then call ui_scan again
  */
 export async function uiScan(
-  exec?: ExecFn,
-  projectCwd: string = process.cwd()
+  exec?: ExecFn
 ): Promise<UIScanResult> {
   const fn = exec ?? defaultExec;
 
@@ -160,17 +158,6 @@ export async function uiScan(
         "build & run the app and call ui_scan again.",
       setupGuide: SETUP_GUIDE,
     };
-  }
-
-  if (sessions.length === 1) {
-    saveProjectSessionDefaults({
-      bundleId: sessions[0].bundleId,
-      session: sessions[0].session,
-      port: sessions[0].port,
-      deviceType: sessions[0].deviceType,
-      deviceName: sessions[0].deviceName,
-      deviceIdentifier: sessions[0].deviceIdentifier,
-    }, projectCwd);
   }
 
   return {

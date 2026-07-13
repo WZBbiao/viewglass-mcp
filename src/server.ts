@@ -33,6 +33,7 @@ import { uiSwipe } from "./tools/ui_swipe.js";
 import { uiLongPress } from "./tools/ui_long_press.js";
 import { uiDismiss } from "./tools/ui_dismiss.js";
 import { uiFeedback } from "./tools/ui_feedback.js";
+import { uiScan } from "./tools/ui_scan.js";
 import {
   logAgentTrace,
   logToolFinish,
@@ -43,6 +44,7 @@ import {
 } from "./log.js";
 import { autoBootstrapForMcpStartup, ensureProjectBootstrapForUsage } from "./init.js";
 import { noteSuccessfulTool } from "./project_memory.js";
+import { deviceAccess, DeviceAccessError } from "./device_access.js";
 
 export function createServer() {
 const server = new McpServer({
@@ -85,7 +87,7 @@ async function withToolLogging<TArgs extends object>(
   logToolStart(name, args);
   logAgentTrace({ event: "tool:start", traceId, tool: name, session, args });
   try {
-    const result = await run();
+    const result = await deviceAccess.runTool(name, args, run);
     const durationMs = Date.now() - startedAt;
     const parsedFirstText = (() => {
       const firstText = result.content[0]?.text;
@@ -124,11 +126,32 @@ async function withToolLogging<TArgs extends object>(
       isError: true,
       error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : safeStringify(error, 1200),
     });
+    if (error instanceof DeviceAccessError) {
+      return { isError: true, content: [{ type: "text", text: String(error) }] };
+    }
     throw error;
   }
 }
 
-// ─── ui_snapshot ────────────────────────────────────────────────────────────
+// ─── ui_scan ────────────────────────────────────────────────────────────────
+
+server.registerTool(
+  "ui_scan",
+  {
+    description:
+      "List all currently discoverable Viewglass app sessions without claiming exclusive control of any device. " +
+      "Use this before ui_connect when several simulators or physical devices are available, or after a device lease conflict to choose another instance by deviceIdentifier.",
+    inputSchema: {},
+    annotations: { readOnlyHint: true, idempotentHint: true },
+  },
+  async () =>
+    withToolLogging("ui_scan", {}, async () => {
+      const result = await uiScan();
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+);
+
+// ─── ui_feedback ────────────────────────────────────────────────────────────
 
 server.registerTool(
   "ui_feedback",
@@ -204,7 +227,7 @@ server.registerTool(
           "Compact-mode node budget. In actionIndex mode defaults to 24, or 32 when filter is set, and is capped at 48. In fullIndex mode defaults to 80/160; set 0 to return the full compact node index."
         ),
     },
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: false },
   },
   async ({ session, filter, mode, compact, maxNodes }) =>
     withToolLogging("ui_snapshot", { session, filter, mode, compact, maxNodes }, async () => {
@@ -620,6 +643,8 @@ server.registerTool(
       "If multiple sessions match the same bundle ID, ViewglassMCP does not guess. " +
       "Pass session, port, deviceIdentifier, deviceName, or deviceType; " +
       "or set those under sessionDefaults in .viewglassmcp/config.yaml. " +
+      "A successful connection exclusively leases the whole device to this MCP agent. If another agent owns it, " +
+      "ui_connect returns an error with alternative simulator/device instances; choose one of those instead of retrying. " +
       "After a successful connection, ViewglassMCP persists the resolved bundle id plus target selectors into .viewglassmcp/config.yaml for future runs. " +
       "Once config.yaml has a bundleId, other Viewglass tools should usually omit session and let MCP resolve it automatically. " +
       "If the app is not found: ask the user to build and run it in Xcode (Debug scheme) and try again.",
@@ -651,7 +676,7 @@ server.registerTool(
       deviceIdentifier: z
         .string()
         .optional()
-        .describe("Exact physical-device UDID from ui_scan or apps list."),
+        .describe("Exact simulator/device identifier (UDID) from ui_scan or apps list."),
     },
     annotations: { readOnlyHint: true },
   },
@@ -748,7 +773,7 @@ server.registerTool(
   "ui_swipe",
   {
     description:
-      "Perform a swipe gesture on a UIScrollView. " +
+      "Perform a swipe gesture on a UI node. UIScrollView targets use scroll semantics; non-scrollable pan targets use coordinate semantic swipe. " +
       "Use ui_scroll for normal page scrolling because it resolves wrappers/cells to the real scroll container first. " +
       "Use ui_swipe directly for paging scroll views, carousels, and gesture-driven interactions. " +
       "distance defaults to 200 pts if omitted.",

@@ -144,6 +144,8 @@ If omitted, ViewglassMCP checks `.viewglassmcp/config.yaml` for `sessionDefaults
 When multiple sessions match the same bundle ID, ViewglassMCP does not guess; provide `session`, `port`, `deviceIdentifier`, `deviceName`, or `deviceType`, or set them under `sessionDefaults`.
 Prefer stable selectors such as `deviceIdentifier`, `deviceName`, and `deviceType`; treat `session` and `port` as last-known runtime hints because they can change after relaunch.
 
+`ui_connect` acquires an exclusive device lease for the lifetime of the MCP process. Only one Codex or Claude agent may control a physical device or simulator at a time, even when different apps are running on it. If a device is already leased, do not retry it: use the alternative instances listed in the error and reconnect with their `deviceIdentifier`, `deviceName`, or `deviceType`. Calls made concurrently by the owning agent are serialized per device to protect the app and Viewglass connection.
+
 ### Override binary
 
 Set `VIEWGLASS_BIN` to use a specific binary (development / CI):

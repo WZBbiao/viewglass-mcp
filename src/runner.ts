@@ -4,10 +4,12 @@ import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { logCliFinish, logCliStart } from "./log.js";
+import { currentDeviceExecution } from "./device_context.js";
 import { loadProjectConfig } from "./project_config.js";
 import {
   applySessionSelectors,
   compactSelectors,
+  deviceKeyOf,
   matchingBundleCandidates,
   selectByConfigFallback,
   sessionOf,
@@ -278,6 +280,10 @@ async function recoverSessionAfterFailure(
     const { candidates } = selectByConfigFallback(matches, selectors);
     const app = chooseUnambiguousApp(candidates);
     if (!app) return undefined;
+    const activeDeviceKey = currentDeviceExecution()?.deviceKey;
+    if (activeDeviceKey && deviceKeyOf(app) !== activeDeviceKey) {
+      return undefined;
+    }
     return sessionOf(app);
   } catch {
     return undefined;
@@ -292,7 +298,7 @@ export async function resolveSession(
   exec?: ExecFn,
   projectCwd: string = process.cwd()
 ): Promise<string> {
-  const s = session ?? (await detectSession(exec, projectCwd));
+  const s = session ?? currentDeviceExecution()?.session ?? (await detectSession(exec, projectCwd));
   if (!s) {
     throw new Error(
       "No unambiguous Viewglass session found. Start the app with Viewglass enabled, pass session as bundleId@port, " +
